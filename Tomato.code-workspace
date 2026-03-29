@@ -1,0 +1,588 @@
+{
+	"folders": [
+		{
+			"name": "Tomato",
+			"path": "."
+		},
+		{
+			"name": "UE5",
+			"path": "/Users/Shared/Epic Games/UE_5.7"
+		}
+	],
+	"settings": {
+		"typescript.tsc.autoDetect": "off",
+		"npm.autoDetect": "off",
+		"terminal.integrated.env.mac": {
+			"PATH": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64:${env:PATH}",
+			"DOTNET_ROOT": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64",
+			"DOTNET_HOST_PATH": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64/dotnet",
+			"DOTNET_MULTILEVEL_LOOKUP": "0",
+			"DOTNET_ROLL_FORWARD": "LatestMajor"
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-vscode.cpptools",
+			"ms-dotnettools.csharp"
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Tomato Mac Debug Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Debug Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"Tomato Mac Debug Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Debug Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac DebugGame Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac DebugGame Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"Tomato Mac DebugGame Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac DebugGame Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Development Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Development Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"Tomato Mac Development Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Development Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Test Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Test",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Test Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Test",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"Tomato Mac Test Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Test Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Test",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Shipping Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Shipping",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Shipping Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Shipping",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"Tomato Mac Shipping Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "Tomato Mac Shipping Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"Tomato",
+					"Mac",
+					"Shipping",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Debug Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Debug Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"TomatoEditor Mac Debug Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Debug Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Debug",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac DebugGame Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac DebugGame Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"TomatoEditor Mac DebugGame Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac DebugGame Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"DebugGame",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Development Build",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Development Rebuild",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex"
+				],
+				"problemMatcher": "$msCompile",
+				"dependsOn": [
+					"TomatoEditor Mac Development Clean"
+				],
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			},
+			{
+				"label": "TomatoEditor Mac Development Clean",
+				"group": "build",
+				"command": "Engine/Build/BatchFiles/Mac/Build.sh",
+				"args": [
+					"TomatoEditor",
+					"Mac",
+					"Development",
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-waitmutex",
+					"-clean"
+				],
+				"problemMatcher": "$msCompile",
+				"type": "shell",
+				"options": {
+					"cwd": "/Users/Shared/Epic Games/UE_5.7"
+				}
+			}
+		]
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Launch Tomato (Debug)",
+				"request": "launch",
+				"program": "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Binaries/Mac/UnrealGame-Mac-Debug.app/Contents/MacOS/UnrealGame-Mac-Debug",
+				"preLaunchTask": "Tomato Mac Debug Build",
+				"args": [
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch Tomato (DebugGame)",
+				"request": "launch",
+				"program": "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Binaries/Mac/UnrealGame-Mac-DebugGame.app/Contents/MacOS/UnrealGame-Mac-DebugGame",
+				"preLaunchTask": "Tomato Mac DebugGame Build",
+				"args": [
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch Tomato (Development)",
+				"request": "launch",
+				"program": "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Binaries/Mac/UnrealGame.app/Contents/MacOS/UnrealGame",
+				"preLaunchTask": "Tomato Mac Development Build",
+				"args": [
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch Tomato (Test)",
+				"request": "launch",
+				"program": "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Binaries/Mac/UnrealGame-Mac-Test.app/Contents/MacOS/UnrealGame-Mac-Test",
+				"preLaunchTask": "Tomato Mac Test Build",
+				"args": [
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch Tomato (Shipping)",
+				"request": "launch",
+				"program": "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Binaries/Mac/UnrealGame-Mac-Shipping.app/Contents/MacOS/UnrealGame-Mac-Shipping",
+				"preLaunchTask": "Tomato Mac Shipping Build",
+				"args": [
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch TomatoEditor (Debug)",
+				"request": "launch",
+				"program": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor-Mac-Debug.app/Contents/MacOS/UnrealEditor-Mac-Debug",
+				"preLaunchTask": "TomatoEditor Mac Debug Build",
+				"args": [
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject"
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch TomatoEditor (DebugGame)",
+				"request": "launch",
+				"program": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor-Mac-DebugGame.app/Contents/MacOS/UnrealEditor-Mac-DebugGame",
+				"preLaunchTask": "TomatoEditor Mac DebugGame Build",
+				"args": [
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject"
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Launch TomatoEditor (Development)",
+				"request": "launch",
+				"program": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor.app/Contents/MacOS/UnrealEditor",
+				"preLaunchTask": "TomatoEditor Mac Development Build",
+				"args": [
+					"/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject"
+				],
+				"cwd": "/Users/Shared/Epic Games/UE_5.7",
+				"type": "lldb"
+			},
+			{
+				"name": "Generate Project Files",
+				"type": "coreclr",
+				"request": "launch",
+				"preLaunchTask": "UnrealBuildTool Mac Development Build",
+				"program": "/Users/Shared/Epic Games/UE_5.7/Engine/Build/BatchFiles/RunUBT.bat",
+				"args": [
+					"-projectfiles",
+					"-vscode",
+					"-project=/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/Tomato.uproject",
+					"-game",
+					"-engine",
+					"-dotnet"
+				],
+				"env": {
+					"PATH": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64:${env:PATH}",
+					"DOTNET_ROOT": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64",
+					"DOTNET_HOST_PATH": "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/mac-arm64/dotnet",
+					"DOTNET_MULTILEVEL_LOOKUP": "0",
+					"DOTNET_ROLL_FORWARD": "LatestMajor"
+				},
+				"console": "internalConsole",
+				"internalConsoleOptions": "openOnSessionStart",
+				"stopAtEntry": false,
+				"cwd": "/Users/Shared/Epic Games/UE_5.7"
+			}
+		]
+	}
+}
