@@ -1,0 +1,46 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.7",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "Tomato",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	],
+    "Plugins": [
+    {
+                "Name": "OpenXR",
+                "Enabled": true
+            },
+
+   {
+
+   "Name": "ModelingToolsEditorMode",
+
+   "Enabled": true,
+
+   "TargetAllowList": [
+
+   "Editor"
+
+   ]
+
+   },
+
+   {
+
+   "Name": "GameplayStateTree",
+
+   "Enabled": true
+
+   }
+
+   ]
+
+   }
