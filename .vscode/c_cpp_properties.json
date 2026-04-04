@@ -14,7 +14,7 @@
             "cppStandard": "c++20",
             "intelliSenseMode": "clang-arm64",
             "compileCommands": [
-                "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/.vscode/compileCommands_Tomato.json"
+                "/Users/hw25a064/GitHub/tamatoo/.vscode/compileCommands_Tomato.json"
             ]
         },
         {
@@ -31,7 +31,7 @@
             "cppStandard": "c++20",
             "intelliSenseMode": "clang-arm64",
             "compileCommands": [
-                "/Users/shimadahajime/Documents/Unreal Projects/Tomato/Tomato/.vscode/compileCommands_Default.json"
+                "/Users/hw25a064/GitHub/tamatoo/.vscode/compileCommands_Default.json"
             ]
         }
     ],
