@@ -27,7 +27,7 @@ FOpenXRToLeapWrapper::FOpenXRToLeapWrapper()
 	CurrentDeviceInfo = &DummyDeviceInfo;
 	DummyDeviceInfo = {0};
 	DummyDeviceInfo.size = sizeof(LEAP_DEVICE_INFO);
-	DummyDeviceInfo.serial = (char *)("OpenXRDummyDevice");
+	DummyDeviceInfo.serial = (char*) ("OpenXRDummyDevice");
 	DummyDeviceInfo.serial_length = strlen(DummyDeviceInfo.serial) + 1;
 
 	DummyLeapHands[0] = {0};
@@ -44,7 +44,7 @@ FOpenXRToLeapWrapper::FOpenXRToLeapWrapper()
 	DummyLeapFrame.framerate = 90;
 	DummyLeapFrame.pHands = DummyLeapHands;
 
-	Device = MakeShared<FUltraleapDevice>((IHandTrackingWrapper *)this, (ITrackingDeviceWrapper *)this, true);
+	Device = MakeShared<FUltraleapDevice>((IHandTrackingWrapper*) this, (ITrackingDeviceWrapper*) this, true);
 
 	// finger IDs are the index into the digits
 	for (int i = 0; i < 5; ++i)
@@ -55,9 +55,9 @@ FOpenXRToLeapWrapper::FOpenXRToLeapWrapper()
 FOpenXRToLeapWrapper::~FOpenXRToLeapWrapper()
 {
 }
-LEAP_CONNECTION *FOpenXRToLeapWrapper::OpenConnection(LeapWrapperCallbackInterface *InCallbackDelegate, bool UseMultiDeviceMode)
+LEAP_CONNECTION* FOpenXRToLeapWrapper::OpenConnection(LeapWrapperCallbackInterface* InCallbackDelegate, bool UseMultiDeviceMode)
 {
-	if (InCallbackDelegate != nullptr)
+	if (InCallbackDelegate!=nullptr)
 	{
 		CallbackDelegate = InCallbackDelegate;
 	}
@@ -78,7 +78,7 @@ void FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule()
 	if (!GEngine->XRSystem.IsValid())
 	{
 		UE_LOG(UltraleapTrackingLog, Warning, TEXT("Warning: FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule() No XR System found, is an HMD connected?"));
-
+	
 		return;
 	}
 	if (GEngine->XRSystem->GetSystemName() == SystemName)
@@ -91,19 +91,19 @@ void FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule()
 		return;
 	}
 
-	IModuleInterface *ModuleInterface = FModuleManager::Get().LoadModule("OpenXRULHandTrackingExt");
+	IModuleInterface* ModuleInterface = FModuleManager::Get().LoadModule("OpenXRULHandTrackingExt");
 
 	if (!ModuleInterface)
 	{
 		ModuleInterface = FModuleManager::Get().LoadModule("OpenXRHandTracking");
 	}
 
-	IModularFeatures &ModularFeatures = IModularFeatures::Get();
+	IModularFeatures& ModularFeatures = IModularFeatures::Get();
 	if (ModularFeatures.IsModularFeatureAvailable(IHandTracker::GetModularFeatureName()))
 	{
-		TArray<IHandTracker *, FDefaultAllocator> Implementations = IModularFeatures::Get().GetModularFeatureImplementations<IHandTracker>(IHandTracker::GetModularFeatureName());
-
-		for (IHandTracker *Implementation : Implementations)
+		TArray<IHandTracker*, FDefaultAllocator> Implementations = IModularFeatures::Get().GetModularFeatureImplementations<IHandTracker>(IHandTracker::GetModularFeatureName());
+		
+		for (IHandTracker* Implementation : Implementations)
 		{
 			if (Implementation->GetHandTrackerDeviceTypeName() == "UltraleapOpenXRHandTracking")
 			{
@@ -117,8 +117,8 @@ void FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule()
 			HandTracker = &IModularFeatures::Get().GetModularFeature<IHandTracker>(IHandTracker::GetModularFeatureName());
 			UsingUltraleapExtension = false;
 		}
-
-		bIsConnected = true;
+		
+		bIsConnected = true;	
 
 		if (CallbackDelegate)
 		{
@@ -128,22 +128,22 @@ void FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule()
 	else
 	{
 		UE_LOG(UltraleapTrackingLog, Log,
-			   TEXT(" FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule() - OpenXRHandTracking module not found, is the "
-					"OpenXRHandTracking plugin enabled?"));
+			TEXT(" FOpenXRToLeapWrapper::InitOpenXRHandTrackingModule() - OpenXRHandTracking module not found, is the "
+				 "OpenXRHandTracking plugin enabled?"));
 	}
 }
-LEAP_VECTOR ConvertPositionToLeap(const FVector &FromOpenXR)
+LEAP_VECTOR ConvertPositionToLeap(const FVector& FromOpenXR)
 {
 	LEAP_VECTOR Ret = FLeapUtility::ConvertAndScaleUEToLeap(FromOpenXR);
 
 	return Ret;
 }
 
-int Sign(const ELeapQuatSwizzleAxisB &QuatSwizzleAxis)
+int Sign(const ELeapQuatSwizzleAxisB& QuatSwizzleAxis)
 {
 	return (QuatSwizzleAxis > ELeapQuatSwizzleAxisB::W) ? -1 : 1;
 }
-LEAP_QUATERNION FOpenXRToLeapWrapper::ConvertOrientationToLeap(const FQuat &FromOpenXR)
+LEAP_QUATERNION FOpenXRToLeapWrapper::ConvertOrientationToLeap(const FQuat& FromOpenXR)
 {
 	LEAP_QUATERNION Ret = {{{0}}};
 
@@ -156,7 +156,7 @@ LEAP_QUATERNION FOpenXRToLeapWrapper::ConvertOrientationToLeap(const FQuat &From
 
 	return Ret;
 }
-LEAP_VECTOR ConvertFVectorToLeapVector(const FVector &UEVector)
+LEAP_VECTOR ConvertFVectorToLeapVector(const FVector& UEVector)
 {
 	LEAP_VECTOR Ret;
 	// inverse of  FVector(LeapVector.y, -LeapVector.x, -LeapVector.z);
@@ -168,324 +168,324 @@ LEAP_VECTOR ConvertFVectorToLeapVector(const FVector &UEVector)
 	return Ret;
 }
 void FOpenXRToLeapWrapper::SetHandJointFromKeypoint(
-	const int KeyPoint, LEAP_HAND &LeapHand, const FVector &Position, const FQuat &Rotation)
+	const int KeyPoint, LEAP_HAND& LeapHand, const FVector& Position, const FQuat& Rotation)
 {
-	EHandKeypoint eKeyPoint = (EHandKeypoint)KeyPoint;
+	EHandKeypoint eKeyPoint = (EHandKeypoint) KeyPoint;
 	switch (eKeyPoint)
 	{
-	case EHandKeypoint::Palm:
-		// wrist orientation comes from palm orientation in bodystate
-		// palm orientation is calculated from palm direction in LeapHandData
-		{
-			LeapHand.palm.orientation = ConvertOrientationToLeap(Rotation);
-			LeapHand.palm.position = ConvertPositionToLeap(Position);
-		}
-		break;
-	case EHandKeypoint::Wrist:
-		// wrist comes from arm next joint in bodystate
-		LeapHand.arm.prev_joint = LeapHand.arm.next_joint = ConvertPositionToLeap(Position);
-		// set arm rotation from Wrist
-		LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
-		LeapHand.arm.width = 10;
-		break;
-		// Thumb ////////////////////////////////////////////////////
-		/** From the leap data header
-		 *
-		 * For thumbs, this bone is set to have zero length and width, an identity basis matrix,
-		 * and its joint positions are equal.
-		 * Note that this is anatomically incorrect; in anatomical terms, the intermediate phalange
-		 * is absent in a real thumb, rather than the metacarpal bone. In the Leap Motion model,
-		 * however, we use a "zero" metacarpal bone instead for ease of programming.
-		 * @since 3.0.0
-		 */
-	case EHandKeypoint::ThumbMetacarpal:
-		LeapHand.thumb.metacarpal.prev_joint = LeapHand.thumb.proximal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.thumb.metacarpal.rotation = LeapHand.thumb.proximal.rotation = ConvertOrientationToLeap(Rotation);
+		case EHandKeypoint::Palm:
+			// wrist orientation comes from palm orientation in bodystate
+			// palm orientation is calculated from palm direction in LeapHandData
+			{
+				LeapHand.palm.orientation = ConvertOrientationToLeap(Rotation);
+				LeapHand.palm.position = ConvertPositionToLeap(Position);
+			}
+			break;
+		case EHandKeypoint::Wrist:
+			// wrist comes from arm next joint in bodystate
+			LeapHand.arm.prev_joint = LeapHand.arm.next_joint = ConvertPositionToLeap(Position);
+			// set arm rotation from Wrist
+			LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
+			LeapHand.arm.width = 10;
+			break;
+			// Thumb ////////////////////////////////////////////////////
+			/** From the leap data header
+			 *
+			 * For thumbs, this bone is set to have zero length and width, an identity basis matrix,
+			 * and its joint positions are equal.
+			 * Note that this is anatomically incorrect; in anatomical terms, the intermediate phalange
+			 * is absent in a real thumb, rather than the metacarpal bone. In the Leap Motion model,
+			 * however, we use a "zero" metacarpal bone instead for ease of programming.
+			 * @since 3.0.0
+			 */
+		case EHandKeypoint::ThumbMetacarpal:
+			LeapHand.thumb.metacarpal.prev_joint = LeapHand.thumb.proximal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.thumb.metacarpal.rotation = LeapHand.thumb.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::ThumbProximal:
-		LeapHand.thumb.intermediate.prev_joint = LeapHand.thumb.metacarpal.next_joint = LeapHand.thumb.proximal.next_joint =
-			ConvertPositionToLeap(Position);
-		LeapHand.thumb.intermediate.rotation = ConvertOrientationToLeap(Rotation);
-		break;
-	case EHandKeypoint::ThumbDistal:
-		LeapHand.thumb.distal.prev_joint = LeapHand.thumb.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.thumb.distal.rotation = ConvertOrientationToLeap(Rotation);
-		break;
-	case EHandKeypoint::ThumbTip:
-		// tip is next of distal
-		LeapHand.thumb.distal.next_joint = ConvertPositionToLeap(Position);
-		break;
+			break;
+		case EHandKeypoint::ThumbProximal:
+			LeapHand.thumb.intermediate.prev_joint = LeapHand.thumb.metacarpal.next_joint = LeapHand.thumb.proximal.next_joint =
+				ConvertPositionToLeap(Position);
+			LeapHand.thumb.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::ThumbDistal:
+			LeapHand.thumb.distal.prev_joint = LeapHand.thumb.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.thumb.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::ThumbTip:
+			// tip is next of distal
+			LeapHand.thumb.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
 
-	// Index ////////////////////////////////////////////////////
-	case EHandKeypoint::IndexMetacarpal:
-		LeapHand.index.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+		// Index ////////////////////////////////////////////////////
+		case EHandKeypoint::IndexMetacarpal:
+			LeapHand.index.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::IndexProximal:
-		LeapHand.index.proximal.prev_joint = LeapHand.index.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::IndexProximal:
+			LeapHand.index.proximal.prev_joint = LeapHand.index.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::IndexIntermediate:
-		LeapHand.index.intermediate.prev_joint = LeapHand.index.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::IndexIntermediate:
+			LeapHand.index.intermediate.prev_joint = LeapHand.index.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::IndexDistal:
-		LeapHand.index.distal.prev_joint = LeapHand.index.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::IndexDistal:
+			LeapHand.index.distal.prev_joint = LeapHand.index.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::IndexTip:
-		LeapHand.index.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		case EHandKeypoint::IndexTip:
+			LeapHand.index.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	// Middle ////////////////////////////////////////////////////
-	case EHandKeypoint::MiddleMetacarpal:
-		LeapHand.middle.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		// Middle ////////////////////////////////////////////////////
+		case EHandKeypoint::MiddleMetacarpal:
+			LeapHand.middle.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::MiddleProximal:
-		LeapHand.middle.proximal.prev_joint = LeapHand.middle.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::MiddleProximal:
+			LeapHand.middle.proximal.prev_joint = LeapHand.middle.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::MiddleIntermediate:
-		LeapHand.middle.intermediate.prev_joint = LeapHand.middle.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::MiddleIntermediate:
+			LeapHand.middle.intermediate.prev_joint = LeapHand.middle.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::MiddleDistal:
-		LeapHand.middle.distal.prev_joint = LeapHand.middle.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::MiddleDistal:
+			LeapHand.middle.distal.prev_joint = LeapHand.middle.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::MiddleTip:
-		LeapHand.middle.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		case EHandKeypoint::MiddleTip:
+			LeapHand.middle.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	// Ring ////////////////////////////////////////////////////
-	case EHandKeypoint::RingMetacarpal:
-		LeapHand.ring.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		// Ring ////////////////////////////////////////////////////
+		case EHandKeypoint::RingMetacarpal:
+			LeapHand.ring.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::RingProximal:
-		LeapHand.ring.proximal.prev_joint = LeapHand.ring.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::RingProximal:
+			LeapHand.ring.proximal.prev_joint = LeapHand.ring.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::RingIntermediate:
-		LeapHand.ring.intermediate.prev_joint = LeapHand.ring.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::RingIntermediate:
+			LeapHand.ring.intermediate.prev_joint = LeapHand.ring.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::RingDistal:
-		LeapHand.ring.distal.prev_joint = LeapHand.ring.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::RingDistal:
+			LeapHand.ring.distal.prev_joint = LeapHand.ring.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::RingTip:
-		LeapHand.ring.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		case EHandKeypoint::RingTip:
+			LeapHand.ring.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
+			break;
 
-	// Little/pinky ////////////////////////////////////////////////////
-	case EHandKeypoint::LittleMetacarpal:
-		LeapHand.pinky.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+		// Little/pinky ////////////////////////////////////////////////////
+		case EHandKeypoint::LittleMetacarpal:
+			LeapHand.pinky.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::LittleProximal:
-		LeapHand.pinky.proximal.prev_joint = LeapHand.pinky.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::LittleProximal:
+			LeapHand.pinky.proximal.prev_joint = LeapHand.pinky.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::LittleIntermediate:
-		LeapHand.pinky.intermediate.prev_joint = LeapHand.pinky.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::LittleIntermediate:
+			LeapHand.pinky.intermediate.prev_joint = LeapHand.pinky.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::LittleDistal:
-		LeapHand.pinky.distal.prev_joint = LeapHand.pinky.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypoint::LittleDistal:
+			LeapHand.pinky.distal.prev_joint = LeapHand.pinky.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypoint::LittleTip:
-		LeapHand.pinky.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		case EHandKeypoint::LittleTip:
+			LeapHand.pinky.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	default:
-		UE_LOG(UltraleapTrackingLog, Log,
-			   TEXT("FOpenXRToLeapWrapper::ConvertToLeapSpace() - Unknown keypoint found in OpenXR data"));
-		break;
+			break;
+		default:
+			UE_LOG(UltraleapTrackingLog, Log,
+				TEXT("FOpenXRToLeapWrapper::ConvertToLeapSpace() - Unknown keypoint found in OpenXR data"));
+			break;
 	}
 }
-void FOpenXRToLeapWrapper::SetHandJointFromKeypointExt(const int KeyPoint, LEAP_HAND &LeapHand, const FVector &Position, const FQuat &Rotation)
+void FOpenXRToLeapWrapper::SetHandJointFromKeypointExt(const int KeyPoint, LEAP_HAND& LeapHand, const FVector& Position, const FQuat& Rotation)
 {
-	EHandKeypointUL eKeyPoint = (EHandKeypointUL)KeyPoint;
+	EHandKeypointUL eKeyPoint = (EHandKeypointUL) KeyPoint;
 	switch (eKeyPoint)
 	{
-	case EHandKeypointUL::Palm:
-		// wrist orientation comes from palm orientation in bodystate
-		// palm orientation is calculated from palm direction in LeapHandData
-		{
-			LeapHand.palm.orientation = ConvertOrientationToLeap(Rotation);
-			LeapHand.palm.position = ConvertPositionToLeap(Position);
-		}
-		break;
-	case EHandKeypointUL::Wrist:
-		// wrist comes from arm next joint in bodystate
-		LeapHand.arm.next_joint = ConvertPositionToLeap(Position);
-		// set arm rotation from Wrist
-		// LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
-		LeapHand.arm.width = 10;
-		break;
-	case EHandKeypointUL::Elbow:
-		LeapHand.arm.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
-		break;
-		// Thumb ////////////////////////////////////////////////////
-		/** From the leap data header
-		 *
-		 * For thumbs, this bone is set to have zero length and width, an identity basis matrix,
-		 * and its joint positions are equal.
-		 * Note that this is anatomically incorrect; in anatomical terms, the intermediate phalange
-		 * is absent in a real thumb, rather than the metacarpal bone. In the Leap Motion model,
-		 * however, we use a "zero" metacarpal bone instead for ease of programming.
-		 * @since 3.0.0
-		 */
+		case EHandKeypointUL::Palm:
+			// wrist orientation comes from palm orientation in bodystate
+			// palm orientation is calculated from palm direction in LeapHandData
+			{
+				LeapHand.palm.orientation = ConvertOrientationToLeap(Rotation);
+				LeapHand.palm.position = ConvertPositionToLeap(Position);
+			}
+			break;
+		case EHandKeypointUL::Wrist:
+			// wrist comes from arm next joint in bodystate
+			LeapHand.arm.next_joint = ConvertPositionToLeap(Position);
+			// set arm rotation from Wrist
+			//LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
+			LeapHand.arm.width = 10;
+			break;
+		case EHandKeypointUL::Elbow:
+			LeapHand.arm.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.arm.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+			// Thumb ////////////////////////////////////////////////////
+			/** From the leap data header
+			 *
+			 * For thumbs, this bone is set to have zero length and width, an identity basis matrix,
+			 * and its joint positions are equal.
+			 * Note that this is anatomically incorrect; in anatomical terms, the intermediate phalange
+			 * is absent in a real thumb, rather than the metacarpal bone. In the Leap Motion model,
+			 * however, we use a "zero" metacarpal bone instead for ease of programming.
+			 * @since 3.0.0
+			 */
+		
+		case EHandKeypointUL::ThumbMetacarpal:
+			LeapHand.thumb.metacarpal.prev_joint = LeapHand.thumb.proximal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.thumb.metacarpal.rotation = LeapHand.thumb.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-	case EHandKeypointUL::ThumbMetacarpal:
-		LeapHand.thumb.metacarpal.prev_joint = LeapHand.thumb.proximal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.thumb.metacarpal.rotation = LeapHand.thumb.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::ThumbProximal:
+			LeapHand.thumb.intermediate.prev_joint = LeapHand.thumb.metacarpal.next_joint = LeapHand.thumb.proximal.next_joint =
+				ConvertPositionToLeap(Position);
+			LeapHand.thumb.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::ThumbDistal:
+			LeapHand.thumb.distal.prev_joint = LeapHand.thumb.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.thumb.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::ThumbTip:
+			// tip is next of distal
+			LeapHand.thumb.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
 
-		break;
-	case EHandKeypointUL::ThumbProximal:
-		LeapHand.thumb.intermediate.prev_joint = LeapHand.thumb.metacarpal.next_joint = LeapHand.thumb.proximal.next_joint =
-			ConvertPositionToLeap(Position);
-		LeapHand.thumb.intermediate.rotation = ConvertOrientationToLeap(Rotation);
-		break;
-	case EHandKeypointUL::ThumbDistal:
-		LeapHand.thumb.distal.prev_joint = LeapHand.thumb.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.thumb.distal.rotation = ConvertOrientationToLeap(Rotation);
-		break;
-	case EHandKeypointUL::ThumbTip:
-		// tip is next of distal
-		LeapHand.thumb.distal.next_joint = ConvertPositionToLeap(Position);
-		break;
+		// Index ////////////////////////////////////////////////////
+		case EHandKeypointUL::IndexMetacarpal:
+			LeapHand.index.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-	// Index ////////////////////////////////////////////////////
-	case EHandKeypointUL::IndexMetacarpal:
-		LeapHand.index.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::IndexProximal:
+			LeapHand.index.proximal.prev_joint = LeapHand.index.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::IndexProximal:
-		LeapHand.index.proximal.prev_joint = LeapHand.index.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::IndexIntermediate:
+			LeapHand.index.intermediate.prev_joint = LeapHand.index.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::IndexIntermediate:
-		LeapHand.index.intermediate.prev_joint = LeapHand.index.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::IndexDistal:
+			LeapHand.index.distal.prev_joint = LeapHand.index.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.index.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::IndexDistal:
-		LeapHand.index.distal.prev_joint = LeapHand.index.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.index.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::IndexTip:
+			LeapHand.index.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	case EHandKeypointUL::IndexTip:
-		LeapHand.index.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		// Middle ////////////////////////////////////////////////////
+		case EHandKeypointUL::MiddleMetacarpal:
+			LeapHand.middle.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	// Middle ////////////////////////////////////////////////////
-	case EHandKeypointUL::MiddleMetacarpal:
-		LeapHand.middle.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::MiddleProximal:
+			LeapHand.middle.proximal.prev_joint = LeapHand.middle.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::MiddleProximal:
-		LeapHand.middle.proximal.prev_joint = LeapHand.middle.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::MiddleIntermediate:
+			LeapHand.middle.intermediate.prev_joint = LeapHand.middle.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::MiddleIntermediate:
-		LeapHand.middle.intermediate.prev_joint = LeapHand.middle.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::MiddleDistal:
+			LeapHand.middle.distal.prev_joint = LeapHand.middle.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.middle.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::MiddleDistal:
-		LeapHand.middle.distal.prev_joint = LeapHand.middle.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.middle.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::MiddleTip:
+			LeapHand.middle.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	case EHandKeypointUL::MiddleTip:
-		LeapHand.middle.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
+		// Ring ////////////////////////////////////////////////////
+		case EHandKeypointUL::RingMetacarpal:
+			LeapHand.ring.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	// Ring ////////////////////////////////////////////////////
-	case EHandKeypointUL::RingMetacarpal:
-		LeapHand.ring.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::RingProximal:
+			LeapHand.ring.proximal.prev_joint = LeapHand.ring.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::RingProximal:
-		LeapHand.ring.proximal.prev_joint = LeapHand.ring.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::RingIntermediate:
+			LeapHand.ring.intermediate.prev_joint = LeapHand.ring.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::RingIntermediate:
-		LeapHand.ring.intermediate.prev_joint = LeapHand.ring.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::RingDistal:
+			LeapHand.ring.distal.prev_joint = LeapHand.ring.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.ring.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::RingDistal:
-		LeapHand.ring.distal.prev_joint = LeapHand.ring.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.ring.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::RingTip:
+			LeapHand.ring.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	case EHandKeypointUL::RingTip:
-		LeapHand.ring.distal.next_joint = ConvertPositionToLeap(Position);
+			break;
 
-		break;
+		// Little/pinky ////////////////////////////////////////////////////
+		case EHandKeypointUL::LittleMetacarpal:
+			LeapHand.pinky.metacarpal.prev_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
 
-	// Little/pinky ////////////////////////////////////////////////////
-	case EHandKeypointUL::LittleMetacarpal:
-		LeapHand.pinky.metacarpal.prev_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.metacarpal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::LittleProximal:
+			LeapHand.pinky.proximal.prev_joint = LeapHand.pinky.metacarpal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.proximal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::LittleProximal:
-		LeapHand.pinky.proximal.prev_joint = LeapHand.pinky.metacarpal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.proximal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::LittleIntermediate:
+			LeapHand.pinky.intermediate.prev_joint = LeapHand.pinky.proximal.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.intermediate.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::LittleIntermediate:
-		LeapHand.pinky.intermediate.prev_joint = LeapHand.pinky.proximal.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.intermediate.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::LittleDistal:
+			LeapHand.pinky.distal.prev_joint = LeapHand.pinky.intermediate.next_joint = ConvertPositionToLeap(Position);
+			LeapHand.pinky.distal.rotation = ConvertOrientationToLeap(Rotation);
 
-		break;
-	case EHandKeypointUL::LittleDistal:
-		LeapHand.pinky.distal.prev_joint = LeapHand.pinky.intermediate.next_joint = ConvertPositionToLeap(Position);
-		LeapHand.pinky.distal.rotation = ConvertOrientationToLeap(Rotation);
+			break;
+		case EHandKeypointUL::LittleTip:
+			LeapHand.pinky.distal.next_joint = ConvertPositionToLeap(Position);
 
-		break;
-	case EHandKeypointUL::LittleTip:
-		LeapHand.pinky.distal.next_joint = ConvertPositionToLeap(Position);
-
-		break;
-	default:
-		UE_LOG(UltraleapTrackingLog, Log,
-			   TEXT("FOpenXRToLeapWrapper::ConvertToLeapSpace() - Unknown keypoint found in OpenXR data"));
-		break;
+			break;
+		default:
+			UE_LOG(UltraleapTrackingLog, Log,
+				TEXT("FOpenXRToLeapWrapper::ConvertToLeapSpace() - Unknown keypoint found in OpenXR data"));
+			break;
 	}
 }
-void FOpenXRToLeapWrapper::ConvertToLeapSpace(LEAP_HAND &LeapHand, const TArray<FVector> &Positions, const TArray<FQuat> &Rotations)
+void FOpenXRToLeapWrapper::ConvertToLeapSpace(LEAP_HAND& LeapHand, const TArray<FVector>& Positions, const TArray<FQuat>& Rotations)
 {
 	if (!XRTrackingSystem)
 	{
@@ -499,7 +499,7 @@ void FOpenXRToLeapWrapper::ConvertToLeapSpace(LEAP_HAND &LeapHand, const TArray<
 
 		// Take out the player transform, this isn't valid as we want Leap Space which knows nothing about
 		// the player world position
-		const FTransform &TrackingToWorldTransform = XRTrackingSystem->GetTrackingToWorldTransform();
+		const FTransform& TrackingToWorldTransform = XRTrackingSystem->GetTrackingToWorldTransform();
 		Position = TrackingToWorldTransform.InverseTransformPosition(Position);
 		Rotation = TrackingToWorldTransform.InverseTransformRotation(Rotation);
 
@@ -523,20 +523,20 @@ void FOpenXRToLeapWrapper::ConvertToLeapSpace(LEAP_HAND &LeapHand, const TArray<
 	}
 }
 
-LEAP_TRACKING_EVENT *FOpenXRToLeapWrapper::GetInterpolatedFrameAtTime(int64 TimeStamp)
+LEAP_TRACKING_EVENT* FOpenXRToLeapWrapper::GetInterpolatedFrameAtTime(int64 TimeStamp)
 {
 	return GetFrame();
 }
 void FOpenXRToLeapWrapper::UpdateHandState()
 {
 }
-LEAP_DEVICE_INFO *FOpenXRToLeapWrapper::GetDeviceProperties()
+LEAP_DEVICE_INFO* FOpenXRToLeapWrapper::GetDeviceProperties()
 {
 	return CurrentDeviceInfo;
 }
 // TODO: update hand Ids on tracking lost and found
 // TODO: work out hand poses and confidence based on how the MS/WMR code does it (pinch and grab)
-LEAP_TRACKING_EVENT *FOpenXRToLeapWrapper::GetFrame()
+LEAP_TRACKING_EVENT* FOpenXRToLeapWrapper::GetFrame()
 {
 	if (HandTracker == nullptr)
 	{
@@ -550,15 +550,15 @@ LEAP_TRACKING_EVENT *FOpenXRToLeapWrapper::GetFrame()
 	// these are in world space
 	//
 	// IMPORTANT: OpenXR tracking only works in VR mode, this will always return false in desktop mode
-	bool bIsTrackedLeft = false;
-	bool StatusLeft = HandTracker->GetAllKeypointStates(EControllerHand::Left, OutPositions[0], OutRotations[0], OutRadii[0], bIsTrackedLeft);
+bool bIsTrackedLeft = false;
+bool StatusLeft = HandTracker->GetAllKeypointStates(EControllerHand::Left, OutPositions[0], OutRotations[0], OutRadii[0], bIsTrackedLeft);
 
-	bool bIsTrackedRight = false;
-	bool StatusRight = HandTracker->GetAllKeypointStates(EControllerHand::Right, OutPositions[1], OutRotations[1], OutRadii[1], bIsTrackedRight);
+bool bIsTrackedRight = false;
+bool StatusRight = HandTracker->GetAllKeypointStates(EControllerHand::Right, OutPositions[1], OutRotations[1], OutRadii[1], bIsTrackedRight);
 
 	DummyLeapFrame.nHands = StatusLeft + StatusRight;
 	DummyLeapFrame.info.frame_id++;
-	UWorld *World = nullptr;
+	UWorld* World = nullptr;
 
 	// time in microseconds
 	DummyLeapFrame.info.timestamp = GetDummyLeapTime();
@@ -575,7 +575,7 @@ LEAP_TRACKING_EVENT *FOpenXRToLeapWrapper::GetFrame()
 
 	if (StatusLeft)
 	{
-
+		
 		ConvertToLeapSpace(DummyLeapHands[0], OutPositions[0], OutRotations[0]);
 		// not tracking -> tracking = update hand IDs
 		if (!LeftHandVisible)
@@ -599,6 +599,7 @@ LEAP_TRACKING_EVENT *FOpenXRToLeapWrapper::GetFrame()
 			DummyLeapHands[1].id = HandID++;
 			FirstSeenRight = GetGameTimeInSeconds();
 		}
+		
 	}
 	else
 	{
@@ -618,9 +619,9 @@ int64_t FOpenXRToLeapWrapper::GetDummyLeapTime()
 		return CurrentWorld->GetTimeSeconds() * 1000000.0f;
 	}
 }
-void FOpenXRToLeapWrapper::SetWorld(UWorld *World)
+void FOpenXRToLeapWrapper::SetWorld(UWorld* World)
 {
-	if (World != nullptr)
+	if (World!=nullptr)
 	{
 		FLeapWrapperBase::SetWorld(World);
 	}
@@ -656,24 +657,24 @@ void FOpenXRToLeapWrapper::SetTrackingMode(eLeapTrackingMode TrackingMode)
 		CallbackDelegate->OnTrackingMode(TrackingMode);
 	}
 }
-void FOpenXRToLeapWrapper::PostLeapHandUpdate(FLeapFrameData &Frame)
+void FOpenXRToLeapWrapper::PostLeapHandUpdate(FLeapFrameData& Frame)
 {
 	// simulate pinch and grab state (in LeapC this comes from the tracking service)
-	for (FLeapHandData &Hand : Frame.Hands)
+	for (FLeapHandData& Hand : Frame.Hands)
 	{
 		UpdatePinchAndGrab(Hand);
 	}
 }
-void FOpenXRToLeapWrapper::SetDeviceHints(TArray<FString> &Hints, const uint32_t LeapDeviceID)
+void FOpenXRToLeapWrapper::SetDeviceHints(TArray<FString>& Hints, const uint32_t LeapDeviceID)
 {
 	// TODO implement this when XR is ready
 }
-IHandTrackingDevice *FOpenXRToLeapWrapper::GetDevice()
+IHandTrackingDevice* FOpenXRToLeapWrapper::GetDevice()
 {
 	return Device.Get();
 }
 
-float FOpenXRToLeapWrapper::CalculatePinchStrength(const FLeapHandData &Hand, float PalmWidth)
+float FOpenXRToLeapWrapper::CalculatePinchStrength(const FLeapHandData& Hand, float PalmWidth)
 {
 	// Magic values taken from existing LeapC implementation (scaled to metres)
 
@@ -687,9 +688,9 @@ float FOpenXRToLeapWrapper::CalculatePinchStrength(const FLeapHandData &Hand, fl
 
 	// Compute the distance midpoints between the thumb and the each finger and find the smallest.
 	float MinDistanceSquared = TNumericLimits<float>::Max();
-
+	
 	int32 FingerIndex = 0;
-	for (const FLeapDigitData &Finger : Hand.Digits)
+	for(const FLeapDigitData& Finger : Hand.Digits)
 	{
 		// skip 1
 		if (!FingerIndex)
@@ -700,7 +701,7 @@ float FOpenXRToLeapWrapper::CalculatePinchStrength(const FLeapHandData &Hand, fl
 		FVector Diff = Finger.Distal.NextJoint - ThumbTipPosition;
 		float DistanceSquared = Diff.SizeSquared();
 		MinDistanceSquared = FMath::Min(DistanceSquared, MinDistanceSquared);
-
+	
 		FingerIndex++;
 	}
 
@@ -708,7 +709,7 @@ float FOpenXRToLeapWrapper::CalculatePinchStrength(const FLeapHandData &Hand, fl
 	return FMath::Clamp<float>((FMath::Sqrt(MinDistanceSquared) - DistanceZero) / (DistanceOne - DistanceZero), 0.0, 1.0);
 }
 
-float FOpenXRToLeapWrapper::CalculateBoneDistanceSquared(const FLeapBoneData &BoneA, const FLeapBoneData &BoneB)
+float FOpenXRToLeapWrapper::CalculateBoneDistanceSquared(const FLeapBoneData& BoneA, const FLeapBoneData& BoneB)
 {
 	// Denormalize directions to bone length.
 	const FVector BoneAJoint = BoneA.PrevJoint;
@@ -732,13 +733,13 @@ float FOpenXRToLeapWrapper::CalculateBoneDistanceSquared(const FLeapBoneData &Bo
 	return (Pa - Pb).SizeSquared();
 }
 
-float FOpenXRToLeapWrapper::CalculatePinchDistance(const FLeapHandData &Hand)
+float FOpenXRToLeapWrapper::CalculatePinchDistance(const FLeapHandData& Hand)
 {
 	// Get the farthest 2 segments of thumb and index finger, respectively, and compute distances.
 	float MinDistanceSquared = TNumericLimits<float>::Max();
-
+	
 	int32 ThumbBoneIndex = 0;
-	for (const FLeapBoneData &ThumbBone : Hand.Thumb.Bones)
+	for (const FLeapBoneData& ThumbBone : Hand.Thumb.Bones)
 	{
 		// skip 2
 		if (ThumbBoneIndex < 2)
@@ -748,7 +749,7 @@ float FOpenXRToLeapWrapper::CalculatePinchDistance(const FLeapHandData &Hand)
 		}
 
 		int IndexBoneIndex = 0;
-		for (const FLeapBoneData &IndexBone : Hand.Index.Bones)
+		for (const FLeapBoneData& IndexBone : Hand.Index.Bones)
 		{
 			// skip 2
 			if (IndexBoneIndex < 2)
@@ -771,12 +772,12 @@ float FOpenXRToLeapWrapper::CalculatePinchDistance(const FLeapHandData &Hand)
 /// and distal axes. Left and right hands will return opposing directions.
 ///
 /// The direction away from the thumb would be called the ulnar axis.
-FVector HandRadialAxis(const FLeapHandData &Hand)
+FVector HandRadialAxis(const FLeapHandData& Hand)
 {
 	FTransform Basis(Hand.Palm.Orientation, Hand.Palm.Position);
 
 	const FVector RightVector = UKismetMathLibrary::GetRightVector(Hand.Palm.Orientation);
-
+	
 	if (Hand.HandType == LEAP_HAND_RIGHT)
 	{
 		return -RightVector;
@@ -790,12 +791,12 @@ FVector HandRadialAxis(const FLeapHandData &Hand)
 /// and radial axes.
 ///
 /// The direction towards the wrist would be called the proximal axis.
-FVector HandDistalAxis(const FLeapHandData &Hand)
+FVector HandDistalAxis(const FLeapHandData& Hand)
 {
 	// in BS Space forward is Z = UpVector in UE
 	return UKismetMathLibrary::GetUpVector(Hand.Palm.Orientation);
 }
-FVector FingerDirection(const FLeapDigitData &Finger)
+FVector FingerDirection(const FLeapDigitData& Finger)
 {
 	// The direction in which this finger or tool is pointing.The direction is expressed
 	// as a unit vector pointing in the same direction as the tip.
@@ -803,17 +804,17 @@ FVector FingerDirection(const FLeapDigitData &Finger)
 }
 /// Maps the value between valueMin and valueMax to its linearly proportional equivalent between resultMin and resultMax.
 /// The input value is clamped between valueMin and valueMax; if this is not desired, see MapUnclamped.
-float MapRange(const float Value, const float ValueMin, const float ValueMax, const float ResultMin, const float ResultMax)
+float MapRange(const float Value,const float ValueMin,const float ValueMax,const float ResultMin,const float ResultMax)
 {
 	if (ValueMin == ValueMax)
 		return ResultMin;
 	return FMath::Lerp(ResultMin, ResultMax, ((Value - ValueMin) / (ValueMax - ValueMin)));
 }
-float GetFingerStrength(const FLeapHandData &Hand, int Finger)
+float GetFingerStrength(const FLeapHandData& Hand, int Finger)
 {
 	return MapRange(FVector::DotProduct(FingerDirection(Hand.Digits[Finger]), -HandDistalAxis(Hand)), -1, 1, 0, 1);
 }
-float FOpenXRToLeapWrapper::CalculateGrabStrength(const FLeapHandData &Hand)
+float FOpenXRToLeapWrapper::CalculateGrabStrength(const FLeapHandData& Hand)
 {
 	// magic numbers so it approximately lines up with the leap results
 	const float BendZero = 0.25f;
@@ -824,26 +825,26 @@ float FOpenXRToLeapWrapper::CalculateGrabStrength(const FLeapHandData &Hand)
 
 	for (int FingerIdx = 1; FingerIdx < 5; FingerIdx++)
 	{
-		MinBend = FMath::Min(GetFingerStrength(Hand, FingerIdx), MinBend);
+		MinBend = FMath::Min( GetFingerStrength(Hand, FingerIdx), MinBend);
 	}
 
 	// Return the grab strength.
 	return FMath::Clamp<float>((MinBend - BendZero) / (BendOne - BendZero), 0.0, 1.0);
 }
 
-float FOpenXRToLeapWrapper::CalculateGrabAngle(const FLeapHandData &Hand)
+float FOpenXRToLeapWrapper::CalculateGrabAngle(const FLeapHandData& Hand)
 {
 	// Compute the sum of the angles between the fingertips and hands.
 	// For every finger, the angle is the sumb of bend + pitch + bow.
 	float AngleSum = 0.0f;
 	for (int FingerIdx = 1; FingerIdx < 5; FingerIdx++)
 	{
-		AngleSum += FMath::Lerp<float>(0, PI, GetFingerStrength(Hand, FingerIdx));
+		AngleSum += FMath::Lerp< float > (0, PI, GetFingerStrength(Hand, FingerIdx));
 	}
 	// Average between all fingers
 	return AngleSum / 4.0f;
 }
-void FOpenXRToLeapWrapper::UpdatePinchAndGrab(FLeapHandData &Hand)
+void FOpenXRToLeapWrapper::UpdatePinchAndGrab(FLeapHandData& Hand)
 {
 	Hand.PinchDistance = CalculatePinchDistance(Hand);
 	Hand.PinchStrength =
@@ -855,26 +856,26 @@ void FOpenXRToLeapWrapper::UpdatePinchAndGrab(FLeapHandData &Hand)
 
 	switch (Hand.HandType)
 	{
-	case LEAP_HAND_LEFT:
-	{
-		if (LeftHandVisible)
+		case LEAP_HAND_LEFT:
 		{
-			Hand.VisibleTime = TimeNow - FirstSeenLeft;
+			if (LeftHandVisible)
+			{
+				Hand.VisibleTime = TimeNow - FirstSeenLeft;
+			}
+			break;
 		}
-		break;
-	}
-	case LEAP_HAND_RIGHT:
-	{
-		if (RightHandVisible)
+		case LEAP_HAND_RIGHT:
 		{
-			Hand.VisibleTime = TimeNow - FirstSeenRight;
+			if (RightHandVisible)
+			{
+				Hand.VisibleTime = TimeNow - FirstSeenRight;
+			}
+			break;
 		}
-		break;
-	}
 	}
 
 	int FingerIndex = 0;
-	for (FLeapDigitData &Finger : Hand.Digits)
+	for (FLeapDigitData& Finger : Hand.Digits)
 	{
 		Finger.IsExtended = GetFingerStrength(Hand, FingerIndex) < 0.4;
 		FingerIndex++;
