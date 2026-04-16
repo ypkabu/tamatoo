@@ -8,13 +8,13 @@
 
 class ATomatoDirtManager;
 class ATomatinaPlayerPawn;
-class ULeapComponent;
 
 /**
- * Ultraleap LeapMotion の手入力を受け取り、タオルの表示・拭き取り・耐久値を管理する。
+ * タオルの表示・拭き取り・耐久値を管理する。
  *
- * LeapComponent を内包し、Tick で GetLatestFrameData() をポーリングして
- * 手の位置を毎フレーム取得する。
+ * 手のデータは Blueprint から UpdateHandData() で渡す方式。
+ * BP 派生クラス側で Ultraleap の OnLeapHandMoved 等を受けて
+ * UpdateHandData(bDetected, ScreenPosition, Speed) を呼ぶこと。
  */
 UCLASS(Blueprintable)
 class TOMATO_API ATomatinaTowelSystem : public AActor
@@ -28,39 +28,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// =========================================================================
-	// LeapMotion コンポーネント
-	// =========================================================================
-
-	/** Ultraleap LeapComponent。フレームデータのポーリングに使用 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LeapMotion")
-	ULeapComponent* LeapComp;
-
-	// =========================================================================
-	// LeapMotion 座標範囲（EditAnywhere で調整可能）
-	// =========================================================================
-
-	/** LeapMotion X 軸の最小値（左端、mm 単位） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
-	float LeapRangeXMin = -150.0f;
-
-	/** LeapMotion X 軸の最大値（右端、mm 単位） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
-	float LeapRangeXMax = 150.0f;
-
-	/**
-	 * LeapMotion Y 軸の最小値（下端、mm 単位）。
-	 * SCREENTOP モードでは Y が奥行き・Z が高さになる場合があるため
-	 * LeapHeightAxisMin/Max と合わせて調整すること。
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
-	float LeapRangeYMin = 50.0f;
-
-	/** LeapMotion Y 軸の最大値（上端、mm 単位） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
-	float LeapRangeYMax = 350.0f;
-
-	// =========================================================================
-	// 手の状態（LeapMotion が自動更新。BP からも参照可能）
+	// 手の状態（BP から UpdateHandData で更新）
 	// =========================================================================
 
 	/** LeapMotion の視野に手があるか */
@@ -69,18 +37,33 @@ public:
 
 	/**
 	 * 手の位置を 0〜1 の正規化座標に変換したもの。
-	 * Tick 内で LeapComponent の Palm.Position から自動更新される。
+	 * BP 側で Ultraleap の Hand 座標を変換して渡すこと。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	FVector2D HandScreenPosition = FVector2D(0.5f, 0.5f);
 
 	/**
-	 * 手の移動速度（正規化座標/秒）。
-	 * 前フレームからの移動距離 / DeltaTime で算出。
+	 * 手の移動速度。BP 側でフレーム間差分から計算して渡すこと。
 	 * 拭き取り効率に直結する。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	float HandSpeed = 0.0f;
+
+	// =========================================================================
+	// 手データ更新（BP から毎フレーム呼ぶ）
+	// =========================================================================
+
+	/**
+	 * BP 派生クラスから毎フレーム呼んで手のデータを渡す。
+	 * Ultraleap の OnLeapTrackingData 等でデータを受け取り
+	 * ここに流し込むことで C++ 側が SDK に依存しない構造になる。
+	 *
+	 * @param bDetected      手が検出されているか
+	 * @param ScreenPosition 手の位置（正規化座標 0〜1）
+	 * @param Speed          手の移動速度（正規化座標/秒）
+	 */
+	UFUNCTION(BlueprintCallable, Category="Towel")
+	void UpdateHandData(bool bDetected, FVector2D ScreenPosition, float Speed);
 
 	// =========================================================================
 	// タオル設定
@@ -110,7 +93,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Towel")
 	float SwapTimer = 0.0f;
 
-	/** タオルが画面に表示されているか */
+	/** タオルが画面に表示されているか（手が検出されているか） */
 	UPROPERTY(BlueprintReadOnly, Category="Towel")
 	bool bTowelVisible = false;
 
@@ -126,13 +109,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Wipe")
 	float WipeEfficiency = 1.0f;
 
-	/** この速度未満では拭き取りが発生しない（正規化座標/秒） */
+	/** この速度未満では拭き取りが発生しない */
 	UPROPERTY(EditAnywhere, Category="Wipe")
-	float MinSpeedToWipe = 0.05f;
+	float MinSpeedToWipe = 50.0f;
 
 	/** HandSpeed にかける係数（速く振るほど効率 UP） */
 	UPROPERTY(EditAnywhere, Category="Wipe")
-	float SpeedMultiplier = 0.5f;
+	float SpeedMultiplier = 0.01f;
 
 	// =========================================================================
 	// 撮影判定
@@ -158,10 +141,7 @@ public:
 	bool CheckTowelInView(FVector2D TowelNormPos);
 
 private:
-	/** レベル上の ATomatoDirtManager を取得（キャッシュ付き） */
 	ATomatoDirtManager* GetDirtManager();
-
-	/** 1P の PlayerPawn を取得（キャッシュ付き） */
 	ATomatinaPlayerPawn* GetPlayerPawn();
 
 	UPROPERTY()
@@ -169,7 +149,4 @@ private:
 
 	UPROPERTY()
 	ATomatinaPlayerPawn* CachedPlayerPawn;
-
-	/** 前フレームの正規化座標（速度計算用） */
-	FVector2D PrevHandPos = FVector2D(0.5f, 0.5f);
 };
