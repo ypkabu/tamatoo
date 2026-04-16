@@ -81,20 +81,20 @@ void ATomatoDirtManager::SpawnDirt()
 // ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 {
-	if (DirtSplats.Num() >= MaxDirts)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::AddDirt: MaxDirts (%d) に達しているためスキップ"), MaxDirts);
-		return;
-	}
-
 	FDirtSplat NewDirt;
 	NewDirt.NormalizedPosition = NormPos;
-	NewDirt.Opacity            = 1.0f;
 	NewDirt.Size               = Size;
+	NewDirt.Opacity            = 1.0f;
 	NewDirt.FadeSpeed          = 0.0f;
 	NewDirt.bActive            = true;
 
 	DirtSplats.Add(NewDirt);
+
+	// MaxDirts を超えたら最古の汚れを削除
+	if (DirtSplats.Num() > MaxDirts)
+	{
+		DirtSplats.RemoveAt(0);
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::AddDirt: pos=(%.2f,%.2f) size=%.3f 合計=%d"),
 		NormPos.X, NormPos.Y, Size, DirtSplats.Num());
@@ -130,31 +130,29 @@ void ATomatoDirtManager::ClearDirtAt(FVector2D NormPos, float Radius)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float EfficiencyDelta)
+void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amount)
 {
-	const float RadiusSq = Radius * Radius;
-	int32 WipedCount = 0;
-
 	for (FDirtSplat& Dirt : DirtSplats)
 	{
 		if (!Dirt.bActive) { continue; }
 
-		const float DistSq = FVector2D::DistSquared(Dirt.NormalizedPosition, NormPos);
-		if (DistSq <= RadiusSq)
+		const float Dist        = FVector2D::Distance(Dirt.NormalizedPosition, NormPos);
+		const float EffectRange = Radius + Dirt.Size * 0.5f;
+
+		if (Dist <= EffectRange)
 		{
-			Dirt.Opacity = FMath::Max(0.0f, Dirt.Opacity - EfficiencyDelta);
+			// 中心ほど効果大（距離に応じたフォールオフ）
+			const float Falloff = 1.0f - (Dist / EffectRange);
+			Dirt.Opacity -= Amount * Falloff;
 			if (Dirt.Opacity <= 0.0f)
 			{
+				Dirt.Opacity = 0.0f;
 				Dirt.bActive = false;
 			}
-			++WipedCount;
 		}
 	}
 
-	if (WipedCount > 0)
-	{
-		DirtSplats.RemoveAll([](const FDirtSplat& D) { return !D.bActive; });
-	}
+	DirtSplats.RemoveAll([](const FDirtSplat& D) { return !D.bActive; });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,9 +176,7 @@ void ATomatoDirtManager::NotifyHUD()
 	{
 		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
 		{
-			// HUD 側で汚れリストを再描画させる
-			// 現状は HUD が GetActiveDirts() をポーリングする想定のため、
-			// 必要に応じてここで HUD のメソッドを追加呼び出しする
+			HUD->UpdateDirtDisplay(DirtSplats);
 			UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::NotifyHUD: HUD に通知（汚れ数=%d）"), DirtSplats.Num());
 		}
 	}

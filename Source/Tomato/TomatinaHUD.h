@@ -109,6 +109,53 @@ public:
 	FString LastComment;
 
 	// =========================================================================
+	// ミッション表示
+	// =========================================================================
+
+	/** ミッションテキスト Widget のクラス（WBP_MissionDisplay を設定） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> MissionWidgetClass;
+
+	/** ミッション結果（時間切れなど）の一時表示 Widget のクラス */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> MissionResultWidgetClass;
+
+	/**
+	 * ミッション開始時に「〇〇を撮れ！」テキストを表示する。
+	 * Widget 側は CurrentMissionText を Binding して描画すること。
+	 */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void ShowMissionText(const FText& Text);
+
+	/** ミッションテキスト Widget をフェードアウトして非表示にする */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void HideMissionText();
+
+	/**
+	 * 制限時間切れ・次ミッション移行時のスコアとコメントを一時表示する。
+	 * @param Score    スコア（0 なら「時間切れ！」）
+	 * @param Comment  表示コメント文字列
+	 */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void ShowMissionResult(int32 Score, const FString& Comment);
+
+	/** ミッション結果の一時表示 Widget を非表示にする */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void HideMissionResult();
+
+	/** 現在のミッションテキスト（MissionWidget の Binding 用） */
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
+	FText CurrentMissionText;
+
+	/** ミッション結果スコア（MissionResultWidget の Binding 用） */
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
+	int32 MissionResultScore = 0;
+
+	/** ミッション結果コメント（MissionResultWidget の Binding 用） */
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
+	FString MissionResultComment;
+
+	// =========================================================================
 	// 汚れ表示
 	// =========================================================================
 
@@ -141,4 +188,12 @@ protected:
 	/** リザルト Widget インスタンス（ShowResult で生成、HideResult で破棄） */
 	UPROPERTY()
 	UUserWidget* ResultWidget;
+
+	/** ミッションテキスト Widget インスタンス（ShowMissionText で生成） */
+	UPROPERTY()
+	UUserWidget* MissionWidget;
+
+	/** ミッション結果 Widget インスタンス（ShowMissionResult で生成、HideMissionResult で破棄） */
+	UPROPERTY()
+	UUserWidget* MissionResultWidget;
 };

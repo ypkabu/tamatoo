@@ -17,7 +17,8 @@ public class Tomato : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"EnhancedInput"
+			"EnhancedInput",
+			"UltraleapTracking"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
