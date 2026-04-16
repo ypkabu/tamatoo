@@ -9,6 +9,7 @@
 
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
+class UTexture2D;
 class ATomatinaTowelSystem;
 class ATomatinaTargetSpawner;
 class ATomatinaHUD;
@@ -47,6 +48,10 @@ struct FMissionData
 	 */
 	UPROPERTY(EditAnywhere)
 	FName SpawnProfileName;
+
+	/** ターゲットのプレビュー画像。HUD の IMG_TargetPreview に表示する */
+	UPROPERTY(EditAnywhere, Category="Mission")
+	UTexture2D* TargetImage = nullptr;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
