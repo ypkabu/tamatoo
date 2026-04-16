@@ -70,6 +70,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Tomatina|Mission")
 	TArray<FMissionData> Missions;
 
+	/**
+	 * true: BeginPlay で Missions をシャッフルしてランダム順に出題する。
+	 * false: 配列の順番通りに出題する。
+	 */
+	UPROPERTY(EditAnywhere, Category="Tomatina|Mission")
+	bool bRandomOrder = true;
+
 	/** 現在のミッションインデックス */
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Mission")
 	int32 CurrentMissionIndex = 0;
@@ -146,6 +153,12 @@ private:
 
 	/** 全ミッション完了時の最終リザルト表示 */
 	void ShowFinalResult();
+
+	/**
+	 * Missions を Fisher-Yates アルゴリズムでシャッフルし、
+	 * 同じ TargetType が連続しないように調整する。
+	 */
+	void ShuffleMissions();
 
 	/** HUD を取得するヘルパー */
 	ATomatinaHUD* GetTomatinaHUD() const;

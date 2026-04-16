@@ -2,8 +2,7 @@
 
 #include "TomatinaTowelSystem.h"
 
-#include "LeapComponent.h"
-#include "UltraleapTrackingData.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -22,8 +21,6 @@ ATomatinaTowelSystem::ATomatinaTowelSystem()
 	, CachedPlayerPawn(nullptr)
 {
 	PrimaryActorTick.bCanEverTick = true;
-
-	LeapComp = CreateDefaultSubobject<ULeapComponent>(TEXT("LeapComponent"));
 }
 
 // =============================================================================
@@ -35,14 +32,20 @@ void ATomatinaTowelSystem::BeginPlay()
 	Super::BeginPlay();
 
 	CurrentDurability = MaxDurability;
-	PrevHandPos = HandScreenPosition;
-
-	// デスクトップ設置想定（デバイスが上向き）
-	// スクリーントップ設置の場合は LEAP_MODE_SCREENTOP に変更すること
-	LeapComp->SetTrackingMode(ELeapMode::LEAP_MODE_DESKTOP);
 
 	UE_LOG(LogTemp, Warning,
 		TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f"), CurrentDurability);
+}
+
+// =============================================================================
+// UpdateHandData（BP から毎フレーム呼ぶ）
+// =============================================================================
+
+void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPosition, float Speed)
+{
+	bHandDetected      = bDetected;
+	HandScreenPosition = ScreenPosition;
+	HandSpeed          = Speed;
 }
 
 // =============================================================================
@@ -52,53 +55,6 @@ void ATomatinaTowelSystem::BeginPlay()
 void ATomatinaTowelSystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	// ── LeapComponent からフレームデータを取得 ──────────────────────────────
-	FLeapFrameData Frame;
-	LeapComp->GetLatestFrameData(Frame);
-
-	if (Frame.Hands.Num() > 0)
-	{
-		// 最初の手を使用（2P は片手操作想定）
-		const FLeapHandData& Hand = Frame.Hands[0];
-
-		bHandDetected = true;
-
-		// 手のひらの位置（プラグインが mm→cm 変換済み。範囲変数は mm 基準なので 10 倍してスケール）
-		// ※ Palm.Position の単位はプラグインが cm に変換している
-		//   EditAnywhere の LeapRange 変数は mm 基準で入力するため
-		//   比較には Hand.Palm.Position をそのまま使い、範囲だけ cm に合わせる
-		const FVector PalmPos = Hand.Palm.Position;
-
-		// 左右（X 軸）を 0〜1 に正規化
-		const float NormX = FMath::GetMappedRangeValueClamped(
-			FVector2D(LeapRangeXMin, LeapRangeXMax),
-			FVector2D(0.0f, 1.0f),
-			PalmPos.X);
-
-		// 高さ（Y 軸）を 0〜1 に正規化（Y 反転：上が 0）
-		const float NormY = FMath::GetMappedRangeValueClamped(
-			FVector2D(LeapRangeYMin, LeapRangeYMax),
-			FVector2D(1.0f, 0.0f),
-			PalmPos.Y);
-
-		const FVector2D NewPos(NormX, NormY);
-
-		// 前フレームとの差分で速度算出（正規化座標/秒）
-		HandSpeed = (DeltaTime > 0.0f)
-			? FVector2D::Distance(PrevHandPos, NewPos) / DeltaTime
-			: 0.0f;
-
-		PrevHandPos        = HandScreenPosition;
-		HandScreenPosition = NewPos;
-	}
-	else
-	{
-		bHandDetected = false;
-		HandSpeed     = 0.0f;
-	}
-
-	// ── 以降は既存の拭き取り・HUD 更新処理 ──────────────────────────────────
 
 	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
@@ -188,7 +144,7 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 		ZoomScreenCenter.Y / FMath::Max(Pawn->MainHeight, 1.f));
 
 	const float ZoomRatio    = Pawn->DefaultFOV
-	                           / FMath::Max(Pawn->SceneCapture_Zoom->FOVAngle, 1.f);
+	                           / FMath::Max<float>(Pawn->SceneCapture_Zoom->FOVAngle, 1.0f);
 	const float ViewHalfSize = 0.5f / ZoomRatio;
 
 	const bool bInView =
@@ -196,8 +152,8 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 		FMath::Abs(TowelNormPos.Y - NormZoomCenter.Y) < ViewHalfSize;
 
 	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaTowelSystem::CheckTowelInView: Towel=(%.2f,%.2f) "
-		     "ZoomCenter=(%.2f,%.2f) HalfSize=%.3f → %s"),
+		TEXT("ATomatinaTowelSystem::CheckTowelInView: "
+		     "Towel=(%.2f,%.2f) ZoomCenter=(%.2f,%.2f) HalfSize=%.3f → %s"),
 		TowelNormPos.X, TowelNormPos.Y,
 		NormZoomCenter.X, NormZoomCenter.Y,
 		ViewHalfSize,

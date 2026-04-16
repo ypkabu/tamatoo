@@ -46,6 +46,12 @@ void ATomatinaGameMode::BeginPlay()
 			TEXT("ATomatinaGameMode::BeginPlay: ATomatinaTargetSpawner がレベル上に見つかりません"));
 	}
 
+	// ランダム順が有効ならシャッフル
+	if (bRandomOrder)
+	{
+		ShuffleMissions();
+	}
+
 	// 最初のミッション開始
 	StartMission(0);
 }
@@ -242,6 +248,58 @@ void ATomatinaGameMode::ShowFinalResult()
 			TEXT("ゲーム終了！合計スコア: %d"), TotalScore);
 		HUD->ShowResult(TotalScore, Comment);
 	}
+}
+
+// =============================================================================
+// ShuffleMissions
+// =============================================================================
+
+void ATomatinaGameMode::ShuffleMissions()
+{
+	const int32 Num = Missions.Num();
+	if (Num <= 1) { return; }
+
+	// Fisher-Yates シャッフル
+	for (int32 i = Num - 1; i > 0; --i)
+	{
+		const int32 j = FMath::RandRange(0, i);
+		Missions.Swap(i, j);
+	}
+
+	// 同じ TargetType が連続しないように調整
+	// 隣り合うペアを見つけたら後ろのものをさらに後ろの異なる要素と入れ替える
+	for (int32 i = 0; i < Num - 1; ++i)
+	{
+		if (Missions[i].TargetType != Missions[i + 1].TargetType) { continue; }
+
+		// i+1 と入れ替えられる候補（TargetType が Missions[i] と異なる）を探す
+		bool bSwapped = false;
+		for (int32 k = i + 2; k < Num; ++k)
+		{
+			if (Missions[k].TargetType != Missions[i].TargetType)
+			{
+				Missions.Swap(i + 1, k);
+				bSwapped = true;
+				break;
+			}
+		}
+
+		if (!bSwapped)
+		{
+			// 後ろに候補がなければ前方向を探す
+			for (int32 k = 0; k < i; ++k)
+			{
+				if (Missions[k].TargetType != Missions[i].TargetType
+					&& (k == 0 || Missions[k - 1].TargetType != Missions[i + 1].TargetType))
+				{
+					Missions.Swap(i + 1, k);
+					break;
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("ATomatinaGameMode::ShuffleMissions: シャッフル完了 (%d ミッション)"), Num);
 }
 
 // =============================================================================
