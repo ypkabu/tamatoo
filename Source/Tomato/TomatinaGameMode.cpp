@@ -12,6 +12,7 @@
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaHUD.h"
 #include "TomatinaTowelSystem.h"
+#include "TomatinaTargetSpawner.h"
 
 // =============================================================================
 // コンストラクタ
@@ -19,8 +20,105 @@
 
 ATomatinaGameMode::ATomatinaGameMode()
 {
-	// デフォルト MissionList
-	MissionList = { FName("Gorilla") };
+}
+
+// =============================================================================
+// BeginPlay
+// =============================================================================
+
+void ATomatinaGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// レベル上の Spawner を検索して取得
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(
+		GetWorld(), ATomatinaTargetSpawner::StaticClass(), Found);
+
+	if (Found.Num() > 0)
+	{
+		TargetSpawner = Cast<ATomatinaTargetSpawner>(Found[0]);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaGameMode::BeginPlay: TargetSpawner 取得"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaGameMode::BeginPlay: ATomatinaTargetSpawner がレベル上に見つかりません"));
+	}
+
+	// 最初のミッション開始
+	StartMission(0);
+}
+
+// =============================================================================
+// StartMission
+// =============================================================================
+
+void ATomatinaGameMode::StartMission(int32 Index)
+{
+	if (Index >= Missions.Num())
+	{
+		ShowFinalResult();
+		return;
+	}
+
+	CurrentMissionIndex = Index;
+	const FMissionData& Mission = Missions[Index];
+	CurrentMission = Mission.TargetType;
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaGameMode::StartMission: Index=%d Type=%s"),
+		Index, *CurrentMission.ToString());
+
+	// HUD にお題テキストを表示
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->ShowMissionText(Mission.DisplayText);
+	}
+
+	// ターゲットをスポーン
+	if (TargetSpawner)
+	{
+		TargetSpawner->SpawnTargetsForMission(Mission);
+	}
+
+	// 制限時間タイマー開始（前のタイマーをクリアしてから）
+	GetWorld()->GetTimerManager().ClearTimer(MissionTimerHandle);
+	if (Mission.TimeLimit > 0.0f)
+	{
+		GetWorld()->GetTimerManager().SetTimer(
+			MissionTimerHandle,
+			this,
+			&ATomatinaGameMode::OnMissionTimeUp,
+			Mission.TimeLimit,
+			false);
+	}
+}
+
+// =============================================================================
+// OnMissionTimeUp（制限時間切れ）
+// =============================================================================
+
+void ATomatinaGameMode::OnMissionTimeUp()
+{
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::OnMissionTimeUp: 時間切れ Index=%d"),
+		CurrentMissionIndex);
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->ShowMissionResult(0, TEXT("時間切れ！"));
+	}
+
+	// 2 秒後に次のミッションへ進む
+	FTimerHandle TempHandle;
+	FTimerDelegate Delegate;
+	Delegate.BindLambda([this]()
+	{
+		if (ATomatinaHUD* H = GetTomatinaHUD()) { H->HideMissionResult(); }
+		StartMission(CurrentMissionIndex + 1);
+	});
+	GetWorld()->GetTimerManager().SetTimer(TempHandle, Delegate, 2.0f, false);
 }
 
 // =============================================================================
@@ -29,10 +127,10 @@ ATomatinaGameMode::ATomatinaGameMode()
 
 void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 {
-	// リザルト表示中は二重撮影を防止
 	if (bIsShowingResult)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::TakePhoto: リザルト表示中のためスキップ"));
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaGameMode::TakePhoto: リザルト表示中のためスキップ"));
 		return;
 	}
 
@@ -45,77 +143,66 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	// ① ズームカメラの映像を RT_Photo にコピー
 	UTomatinaFunctionLibrary::CopyZoomToPhoto(ZoomCamera, RT_Photo);
 
-	// ② スコア計算（ATomatinaTargetBase::StaticClass() は内部で使用）
-	const int32 Score = UTomatinaFunctionLibrary::CalculatePhotoScore(
-		ZoomCamera,
-		CurrentMission,
-		PhoneWidth,
-		PhoneHeight);
+	// ② スコア計算（Spawner のアクティブターゲットを渡す）
+	static const TArray<ATomatinaTargetBase*> EmptyTargets;
+	const TArray<ATomatinaTargetBase*>& Targets =
+		TargetSpawner ? TargetSpawner->ActiveTargets : EmptyTargets;
 
-	// ── タオル映り込み減点 ────────────────────────────────────────────────────
-	FString TowelPenaltyComment;
-	AActor* TowelActor = UGameplayStatics::GetActorOfClass(GetWorld(), ATomatinaTowelSystem::StaticClass());
+	FPhotoResult Result = UTomatinaFunctionLibrary::CalculatePhotoScore(
+		ZoomCamera, Targets, CurrentMission, PhoneWidth, PhoneHeight);
+
+	int32 Score      = Result.Score;
+	FString Comment  = Result.Comment;
+
+	// ── タオル映り込み減点 ─────────────────────────────────────────────────────
+	AActor* TowelActor = UGameplayStatics::GetActorOfClass(
+		GetWorld(), ATomatinaTowelSystem::StaticClass());
 	if (ATomatinaTowelSystem* Towel = Cast<ATomatinaTowelSystem>(TowelActor))
 	{
 		if (Towel->bTowelInZoomView)
 		{
-			Score += Towel->TowelPenalty;          // デフォルト -20
-			Score  = FMath::Max(Score, 0);          // 0 未満にしない
-			TowelPenaltyComment = TEXT(" タオルが映っちゃった！");
+			Score  += Towel->TowelPenalty;   // デフォルト -20
+			Score   = FMath::Max(Score, 0);
+			Comment += TEXT(" タオルが映っちゃった！");
 			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaGameMode::TakePhoto: タオル映り込み減点 %d → %d"),
-				Score - Towel->TowelPenalty, Score);
+				TEXT("ATomatinaGameMode::TakePhoto: タオル映り込み減点 → %d"), Score);
 		}
 	}
 
 	CurrentScore  = Score;
 	TotalScore   += Score;
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::TakePhoto: Score=%d TotalScore=%d"), CurrentScore, TotalScore);
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::TakePhoto: Score=%d TotalScore=%d"), Score, TotalScore);
 
-	// ③ スローモーション（時間停止）
+	// ③ 制限時間タイマーを止める
+	GetWorld()->GetTimerManager().ClearTimer(MissionTimerHandle);
+
+	// ④ 撮影成功（Score > 0）なら最高貢献ターゲットを消す
+	if (Score > 0 && TargetSpawner && Result.BestTarget)
+	{
+		TargetSpawner->RemoveTarget(Result.BestTarget);
+	}
+
+	// ⑤ スローモーション（時間停止）
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.0f);
 
-	// ④ リザルトフラグを立てる
+	// ⑥ リザルトフラグを立てる
 	bIsShowingResult = true;
 
-	// ⑤ HUD にリザルト表示を依頼
-	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (PC)
+	// ⑦ HUD にリザルト表示を依頼
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
-		ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
-		if (HUD)
-		{
-			const FString Comment = GetScoreComment(Score) + TowelPenaltyComment;
-			HUD->ShowResult(Score, Comment);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::TakePhoto: ATomatinaHUD の取得に失敗"));
-		}
+		HUD->ShowResult(Score, Comment);
 	}
 
-	// ⑥ リザルトタイマーをセット
-	// TimeDilation=0 でもタイマーは実時間で動作させるため
-	// FTimerManager::SetTimer の第5引数 bIgnorePause=false はデフォルト。
-	// SetGlobalTimeDilation(0) はゲーム時間を止めるため TimerManager も停止する。
-	// そのため、ここでは TimeDilation が 0 でも動作するよう
-	// GetWorldSettings()->SetTimerForNextTick ではなく
-	// FTimerManager の InRate を実時間ベースで管理する方針を取る。
-	//
-	// ★ 実運用では TimeDilation=0 のままだとタイマーが止まる場合がある。
-	//    その場合は Tick 内で RealTimeSeconds を使って手動カウントするか、
-	//    AWorldSettings::TimeDilation を 0 ではなく 0.001 等の極小値にして
-	//    タイマーが完全停止しないよう調整すること。
-	if (GetWorld())
-	{
-		GetWorld()->GetTimerManager().SetTimer(
-			ResultTimerHandle,
-			this,
-			&ATomatinaGameMode::OnResultTimerEnd,
-			ResultDisplayTime,
-			false);   // bLoop=false
-	}
+	// ⑧ リザルトタイマーをセット
+	GetWorld()->GetTimerManager().SetTimer(
+		ResultTimerHandle,
+		this,
+		&ATomatinaGameMode::OnResultTimerEnd,
+		ResultDisplayTime,
+		false);
 }
 
 // =============================================================================
@@ -124,64 +211,45 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 
 void ATomatinaGameMode::OnResultTimerEnd()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::OnResultTimerEnd: リザルト終了"));
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::OnResultTimerEnd"));
 
-	// ① 時間を元に戻す
+	// 時間を元に戻す
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
-
-	// ② リザルトフラグを解除
 	bIsShowingResult = false;
 
-	// ③ HUD のリザルトを非表示
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->HideResult();
+	}
+
+	// 次のミッションへ
+	StartMission(CurrentMissionIndex + 1);
+}
+
+// =============================================================================
+// ShowFinalResult
+// =============================================================================
+
+void ATomatinaGameMode::ShowFinalResult()
+{
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::ShowFinalResult: 全ミッション完了 TotalScore=%d"),
+		TotalScore);
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		const FString Comment = FString::Printf(
+			TEXT("ゲーム終了！合計スコア: %d"), TotalScore);
+		HUD->ShowResult(TotalScore, Comment);
+	}
+}
+
+// =============================================================================
+// GetTomatinaHUD（ヘルパー）
+// =============================================================================
+
+ATomatinaHUD* ATomatinaGameMode::GetTomatinaHUD() const
+{
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (PC)
-	{
-		ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
-		if (HUD)
-		{
-			HUD->HideResult();
-		}
-	}
-
-	// ④ 次のミッションへ
-	AdvanceMission();
-}
-
-// =============================================================================
-// AdvanceMission
-// =============================================================================
-
-void ATomatinaGameMode::AdvanceMission()
-{
-	MissionIndex++;
-
-	if (MissionList.Num() == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::AdvanceMission: MissionList が空"));
-		return;
-	}
-
-	if (MissionIndex >= MissionList.Num())
-	{
-		// 全ミッションクリア → 先頭に戻してループ
-		// ゲーム終了処理が必要な場合はここで呼ぶ
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::AdvanceMission: 全ミッション完了 → 先頭に戻す (TotalScore=%d)"), TotalScore);
-		MissionIndex = 0;
-	}
-
-	CurrentMission = MissionList[MissionIndex];
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::AdvanceMission: 次のミッション = %s (Index=%d)"),
-		*CurrentMission.ToString(), MissionIndex);
-}
-
-// =============================================================================
-// GetScoreComment
-// =============================================================================
-
-FString ATomatinaGameMode::GetScoreComment(int32 Score) const
-{
-	if (Score >= 100) return TEXT("全身バッチリ！");
-	if (Score >= 50)  return TEXT("上半身のみ！");
-	if (Score >= 10)  return TEXT("足だけ...");
-	return TEXT("映ってない！");
+	return PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
 }

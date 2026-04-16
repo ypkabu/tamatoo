@@ -93,12 +93,12 @@ public:
 	/**
 	 * 指定座標の半径 Radius 以内にある汚れの Opacity を EfficiencyDelta だけ減らす。
 	 * タオルシステムの漸進的な拭き取りに使う（ClearDirtAt は即時消去）。
-	 * @param NormPos         正規化座標（0〜1）
-	 * @param Radius          判定半径（正規化座標系）
-	 * @param EfficiencyDelta 1フレームの拭き取り量（WipeEfficiency * Speed * DeltaTime）
+	 * @param NormPos  正規化座標（0〜1）
+	 * @param Radius   判定半径（正規化座標系）。汚れの Size * 0.5f も加算した範囲が実効半径。
+	 * @param Amount   1フレームの拭き取り量。中心ほどフォールオフが大きく効果大。
 	 */
 	UFUNCTION(BlueprintCallable, Category="Dirt")
-	void WipeDirtAt(FVector2D NormPos, float Radius, float EfficiencyDelta);
+	void WipeDirtAt(FVector2D NormPos, float Radius, float Amount);
 
 	/**
 	 * アクティブな汚れの配列を返す（HUD / Widget が読み取り用）。

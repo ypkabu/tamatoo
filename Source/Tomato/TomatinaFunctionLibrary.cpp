@@ -119,116 +119,102 @@ bool UTomatinaFunctionLibrary::CheckVisibility(
 
 // =============================================================================
 // ② CalculatePhotoScore
-//    ATomatinaTargetBase にキャスト → MyType を直接読む方式
+//    渡された Targets を CurrentMission でフィルタし、
+//    最も画面占有率が高いターゲットを BestTarget として FPhotoResult で返す
 // =============================================================================
 
-int32 UTomatinaFunctionLibrary::CalculatePhotoScore(
+FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	USceneCaptureComponent2D* ZoomCamera,
-	FName MissionTag,
-	float PhoneWidth,
-	float PhoneHeight)
+	const TArray<ATomatinaTargetBase*>& Targets,
+	FName CurrentMission,
+	float ScreenWidth,
+	float ScreenHeight)
 {
+	FPhotoResult Result;
+	Result.Comment = TEXT("映ってない！");
+
 	if (!ZoomCamera)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: ZoomCamera が null"));
-		return 0;
+		return Result;
 	}
 
-	UWorld* World = ZoomCamera->GetWorld();
-	if (!World)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: World が null"));
-		return 0;
-	}
+	FMatrix ViewMatrix;
+	float CotHalfFOV, Aspect;
+	TomatinaInternal::BuildViewParams(ZoomCamera, ScreenWidth, ScreenHeight,
+	                                  ViewMatrix, CotHalfFOV, Aspect);
 
-	// ATomatinaTargetBase の全インスタンスを取得し MyType で絞り込む
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(World, ATomatinaTargetBase::StaticClass(), FoundActors);
+	float BestCoverage = 0.0f;
 
-	ATomatinaTargetBase* MatchingTarget = nullptr;
-	for (AActor* Actor : FoundActors)
+	for (ATomatinaTargetBase* Target : Targets)
 	{
-		ATomatinaTargetBase* Target = Cast<ATomatinaTargetBase>(Actor);
-		if (Target && Target->MyType == MissionTag)
+		if (!IsValid(Target))                    { continue; }
+		if (Target->MyType != CurrentMission)    { continue; }
+		if (!CheckVisibility(ZoomCamera, Target, ScreenWidth, ScreenHeight)) { continue; }
+
+		// バウンドボックス 8 頂点を NDC に投影して最小・最大矩形を求める
+		FVector Origin, Extent;
+		Target->GetActorBounds(false, Origin, Extent);
+
+		const FVector Corners[8] =
 		{
-			MatchingTarget = Target;
-			break;
+			Origin + FVector( Extent.X,  Extent.Y,  Extent.Z),
+			Origin + FVector(-Extent.X,  Extent.Y,  Extent.Z),
+			Origin + FVector( Extent.X, -Extent.Y,  Extent.Z),
+			Origin + FVector(-Extent.X, -Extent.Y,  Extent.Z),
+			Origin + FVector( Extent.X,  Extent.Y, -Extent.Z),
+			Origin + FVector(-Extent.X,  Extent.Y, -Extent.Z),
+			Origin + FVector( Extent.X, -Extent.Y, -Extent.Z),
+			Origin + FVector(-Extent.X, -Extent.Y, -Extent.Z),
+		};
+
+		float MinU = FLT_MAX, MaxU = -FLT_MAX;
+		float MinV = FLT_MAX, MaxV = -FLT_MAX;
+		int32 VisibleCount = 0;
+
+		for (const FVector& Corner : Corners)
+		{
+			const FVector LocalPos = ViewMatrix.TransformPosition(Corner);
+			FVector2D NDC;
+			if (!TomatinaInternal::LocalToNDC(LocalPos, CotHalfFOV, Aspect, NDC)) { continue; }
+
+			MinU = FMath::Min(MinU, NDC.X);
+			MaxU = FMath::Max(MaxU, NDC.X);
+			MinV = FMath::Min(MinV, NDC.Y);
+			MaxV = FMath::Max(MaxV, NDC.Y);
+			++VisibleCount;
+		}
+
+		if (VisibleCount == 0) { continue; }
+
+		// 画面内にクランプして占有面積を算出（NDC 全画面 = 2×2 = 4）
+		const float CU0 = FMath::Clamp(MinU, -1.f, 1.f);
+		const float CU1 = FMath::Clamp(MaxU, -1.f, 1.f);
+		const float CV0 = FMath::Clamp(MinV, -1.f, 1.f);
+		const float CV1 = FMath::Clamp(MaxV, -1.f, 1.f);
+
+		const float Coverage = FMath::Clamp((CU1 - CU0) * (CV1 - CV0) / 4.f, 0.f, 1.f);
+
+		if (Coverage > BestCoverage)
+		{
+			BestCoverage      = Coverage;
+			Result.BestTarget = Target;
 		}
 	}
 
-	if (!MatchingTarget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: MyType='%s' に一致する被写体なし → Score=0"),
-			*MissionTag.ToString());
-		return 0;
-	}
+	Result.Score = FMath::RoundToInt(BestCoverage * 100.f);
 
-	// まず可視チェック
-	if (!CheckVisibility(ZoomCamera, MatchingTarget, PhoneWidth, PhoneHeight))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: 被写体が視野外 → Score=0"));
-		return 0;
-	}
+	// コメント生成
+	if      (Result.Score >= 100) { Result.Comment = TEXT("全身バッチリ！"); }
+	else if (Result.Score >= 50)  { Result.Comment = TEXT("上半身のみ！");   }
+	else if (Result.Score >= 10)  { Result.Comment = TEXT("足だけ...");       }
+	else                          { Result.Comment = TEXT("映ってない！");     }
 
-	// ビューパラメータを構築
-	FMatrix ViewMatrix;
-	float CotHalfFOV, Aspect;
-	TomatinaInternal::BuildViewParams(ZoomCamera, PhoneWidth, PhoneHeight, ViewMatrix, CotHalfFOV, Aspect);
+	UE_LOG(LogTemp, Warning,
+		TEXT("CalculatePhotoScore: Mission='%s' Coverage=%.2f Score=%d"),
+		*CurrentMission.ToString(), BestCoverage, Result.Score);
 
-	// バウンドボックス 8 頂点を NDC に投影して最小・最大矩形を求める
-	FVector Origin, Extent;
-	MatchingTarget->GetActorBounds(false, Origin, Extent);
-
-	const FVector Corners[8] =
-	{
-		Origin + FVector( Extent.X,  Extent.Y,  Extent.Z),
-		Origin + FVector(-Extent.X,  Extent.Y,  Extent.Z),
-		Origin + FVector( Extent.X, -Extent.Y,  Extent.Z),
-		Origin + FVector(-Extent.X, -Extent.Y,  Extent.Z),
-		Origin + FVector( Extent.X,  Extent.Y, -Extent.Z),
-		Origin + FVector(-Extent.X,  Extent.Y, -Extent.Z),
-		Origin + FVector( Extent.X, -Extent.Y, -Extent.Z),
-		Origin + FVector(-Extent.X, -Extent.Y, -Extent.Z),
-	};
-
-	float MinU = FLT_MAX, MaxU = -FLT_MAX;
-	float MinV = FLT_MAX, MaxV = -FLT_MAX;
-	int32 VisibleCount = 0;
-
-	for (const FVector& Corner : Corners)
-	{
-		const FVector LocalPos = ViewMatrix.TransformPosition(Corner);
-		FVector2D NDC;
-		if (!TomatinaInternal::LocalToNDC(LocalPos, CotHalfFOV, Aspect, NDC)) continue;
-
-		MinU = FMath::Min(MinU, NDC.X);
-		MaxU = FMath::Max(MaxU, NDC.X);
-		MinV = FMath::Min(MinV, NDC.Y);
-		MaxV = FMath::Max(MaxV, NDC.Y);
-		++VisibleCount;
-	}
-
-	if (VisibleCount == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: 全頂点がカメラ後方 → Score=0"));
-		return 0;
-	}
-
-	// 画面内にクランプして占有面積を算出（NDC 全画面 = 2×2 = 4）
-	const float CU0 = FMath::Clamp(MinU, -1.f, 1.f);
-	const float CU1 = FMath::Clamp(MaxU, -1.f, 1.f);
-	const float CV0 = FMath::Clamp(MinV, -1.f, 1.f);
-	const float CV1 = FMath::Clamp(MaxV, -1.f, 1.f);
-
-	const float OccupiedArea = (CU1 - CU0) * (CV1 - CV0);
-	const float Coverage     = FMath::Clamp(OccupiedArea / 4.f, 0.f, 1.f);
-
-	const int32 Score = FMath::RoundToInt(Coverage * 100.f);
-
-	UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore: MyType='%s' Coverage=%.2f Score=%d"),
-		*MissionTag.ToString(), Coverage, Score);
-
-	return Score;
+	return Result;
 }
 
 // =============================================================================

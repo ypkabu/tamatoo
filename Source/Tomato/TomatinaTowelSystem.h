@@ -8,16 +8,13 @@
 
 class ATomatoDirtManager;
 class ATomatinaPlayerPawn;
+class ULeapComponent;
 
 /**
- * LeapMotion の手の入力を受け取り、タオルの表示・拭き取り・耐久値を管理する。
+ * Ultraleap LeapMotion の手入力を受け取り、タオルの表示・拭き取り・耐久値を管理する。
  *
- * LeapMotion との接続（推奨：方法A）
- *   BP 派生クラスで LeapMotion プラグインのイベントを受けて
- *   bHandDetected / HandScreenPosition / HandSpeed を Set する。
- *     OnHandTracked  → bHandDetected = true
- *     OnHandLost     → bHandDetected = false
- *     OnHandMoved    → HandScreenPosition, HandSpeed を更新
+ * LeapComponent を内包し、Tick で GetLatestFrameData() をポーリングして
+ * 手の位置を毎フレーム取得する。
  */
 UCLASS(Blueprintable)
 class TOMATO_API ATomatinaTowelSystem : public AActor
@@ -31,25 +28,58 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// =========================================================================
-	// LeapMotion 入力（BP から Set する）
+	// LeapMotion コンポーネント
+	// =========================================================================
+
+	/** Ultraleap LeapComponent。フレームデータのポーリングに使用 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LeapMotion")
+	ULeapComponent* LeapComp;
+
+	// =========================================================================
+	// LeapMotion 座標範囲（EditAnywhere で調整可能）
+	// =========================================================================
+
+	/** LeapMotion X 軸の最小値（左端、mm 単位） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
+	float LeapRangeXMin = -150.0f;
+
+	/** LeapMotion X 軸の最大値（右端、mm 単位） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
+	float LeapRangeXMax = 150.0f;
+
+	/**
+	 * LeapMotion Y 軸の最小値（下端、mm 単位）。
+	 * SCREENTOP モードでは Y が奥行き・Z が高さになる場合があるため
+	 * LeapHeightAxisMin/Max と合わせて調整すること。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
+	float LeapRangeYMin = 50.0f;
+
+	/** LeapMotion Y 軸の最大値（上端、mm 単位） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Range")
+	float LeapRangeYMax = 350.0f;
+
+	// =========================================================================
+	// 手の状態（LeapMotion が自動更新。BP からも参照可能）
 	// =========================================================================
 
 	/** LeapMotion の視野に手があるか */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	bool bHandDetected = false;
 
 	/**
 	 * 手の位置を 0〜1 の正規化座標に変換したもの。
-	 * LeapMotion の手の XY 座標を検出範囲で割って正規化して設定する。
+	 * Tick 内で LeapComponent の Palm.Position から自動更新される。
 	 */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	FVector2D HandScreenPosition = FVector2D(0.5f, 0.5f);
 
 	/**
-	 * 手の移動速度。LeapMotion のフレーム間差分から計算して設定する。
+	 * 手の移動速度（正規化座標/秒）。
+	 * 前フレームからの移動距離 / DeltaTime で算出。
 	 * 拭き取り効率に直結する。
 	 */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	float HandSpeed = 0.0f;
 
 	// =========================================================================
@@ -80,7 +110,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Towel")
 	float SwapTimer = 0.0f;
 
-	/** タオルが画面に表示されているか（手が検出されているか） */
+	/** タオルが画面に表示されているか */
 	UPROPERTY(BlueprintReadOnly, Category="Towel")
 	bool bTowelVisible = false;
 
@@ -96,13 +126,13 @@ public:
 	UPROPERTY(EditAnywhere, Category="Wipe")
 	float WipeEfficiency = 1.0f;
 
-	/** この速度未満では拭き取りが発生しない */
+	/** この速度未満では拭き取りが発生しない（正規化座標/秒） */
 	UPROPERTY(EditAnywhere, Category="Wipe")
-	float MinSpeedToWipe = 50.0f;
+	float MinSpeedToWipe = 0.05f;
 
 	/** HandSpeed にかける係数（速く振るほど効率 UP） */
 	UPROPERTY(EditAnywhere, Category="Wipe")
-	float SpeedMultiplier = 0.01f;
+	float SpeedMultiplier = 0.5f;
 
 	// =========================================================================
 	// 撮影判定
@@ -134,11 +164,12 @@ private:
 	/** 1P の PlayerPawn を取得（キャッシュ付き） */
 	ATomatinaPlayerPawn* GetPlayerPawn();
 
-	/** キャッシュ済み DirtManager */
 	UPROPERTY()
 	ATomatoDirtManager* CachedDirtManager;
 
-	/** キャッシュ済み PlayerPawn */
 	UPROPERTY()
 	ATomatinaPlayerPawn* CachedPlayerPawn;
+
+	/** 前フレームの正規化座標（速度計算用） */
+	FVector2D PrevHandPos = FVector2D(0.5f, 0.5f);
 };

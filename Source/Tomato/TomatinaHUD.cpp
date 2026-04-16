@@ -12,6 +12,8 @@ ATomatinaHUD::ATomatinaHUD()
 	, CursorWidget(nullptr)
 	, DirtOverlayWidget(nullptr)
 	, ResultWidget(nullptr)
+	, MissionWidget(nullptr)
+	, MissionResultWidget(nullptr)
 {
 }
 
@@ -197,13 +199,89 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 {
 	CachedDirts = Dirts;
 
-	// 正規化座標 → 実座標の変換例（DirtOverlayWidget の Blueprint で使用）:
-	//   メイン画面座標 = NormalizedPosition * FVector2D(MainWidth, MainHeight)
-	//   Phone 画面座標 = NormalizedPosition * FVector2D(PhoneWidth, PhoneHeight)
-	//     + PhoneOrigin（Phone 表示左上のオフセット）
-	//
 	// DirtOverlayWidget は CachedDirts を Binding で参照し、
 	// 各要素の NormalizedPosition・Opacity・Size に基づいてスプラットを描画すること。
 
 	UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::UpdateDirtDisplay: 汚れ数=%d"), CachedDirts.Num());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionText(const FText& Text)
+{
+	CurrentMissionText = Text;
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) { return; }
+
+	if (!MissionWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowMissionText: MissionWidgetClass が未設定"));
+		return;
+	}
+
+	// 既存インスタンスがあればテキストだけ更新して終わる
+	if (MissionWidget)
+	{
+		MissionWidget->SetVisibility(ESlateVisibility::Visible);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::ShowMissionText: テキスト更新 '%s'"), *Text.ToString());
+		return;
+	}
+
+	MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
+	if (MissionWidget)
+	{
+		MissionWidget->AddToViewport(250);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::ShowMissionText: Widget 生成 '%s'"), *Text.ToString());
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::HideMissionText()
+{
+	if (MissionWidget)
+	{
+		MissionWidget->SetVisibility(ESlateVisibility::Hidden);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionText: 非表示"));
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionResult(int32 Score, const FString& Comment)
+{
+	MissionResultScore   = Score;
+	MissionResultComment = Comment;
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) { return; }
+
+	if (!MissionResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::ShowMissionResult: MissionResultWidgetClass が未設定"));
+		return;
+	}
+
+	// 既存インスタンスがあれば再利用
+	if (!MissionResultWidget)
+	{
+		MissionResultWidget = CreateWidget<UUserWidget>(PC, MissionResultWidgetClass);
+		if (MissionResultWidget) { MissionResultWidget->AddToViewport(275); }
+	}
+
+	if (MissionResultWidget)
+	{
+		MissionResultWidget->SetVisibility(ESlateVisibility::Visible);
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaHUD::ShowMissionResult: Score=%d Comment=%s"), Score, *Comment);
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::HideMissionResult()
+{
+	if (MissionResultWidget)
+	{
+		MissionResultWidget->SetVisibility(ESlateVisibility::Hidden);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionResult: 非表示"));
+	}
 }

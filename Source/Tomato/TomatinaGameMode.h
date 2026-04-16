@@ -4,15 +4,54 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "TomatinaTargetBase.h"
 #include "TomatinaGameMode.generated.h"
 
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class ATomatinaTowelSystem;
+class ATomatinaTargetSpawner;
+class ATomatinaHUD;
 
-/**
- * ゲームモード。撮影・スコア計算・ミッション進行を管理する。
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// FMissionData — 1 ミッション分の設定
+// ─────────────────────────────────────────────────────────────────────────────
+USTRUCT(BlueprintType)
+struct FMissionData
+{
+	GENERATED_BODY()
+
+	/** お題タグ（ATomatinaTargetBase::MyType と照合） */
+	UPROPERTY(EditAnywhere)
+	FName TargetType;
+
+	/** 画面に表示するお題テキスト（「ゴリラを撮れ！」） */
+	UPROPERTY(EditAnywhere)
+	FText DisplayText;
+
+	/** 制限時間（秒）。0 なら無制限 */
+	UPROPERTY(EditAnywhere)
+	float TimeLimit = 15.0f;
+
+	/** スポーンするターゲットの Blueprint クラス */
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<ATomatinaTargetBase> TargetClass;
+
+	/** 同時に何体出すか */
+	UPROPERTY(EditAnywhere)
+	int32 SpawnCount = 1;
+
+	/**
+	 * 使用するスポーン設定の名前。
+	 * ATomatinaTargetSpawner::SpawnProfiles から検索する。
+	 */
+	UPROPERTY(EditAnywhere)
+	FName SpawnProfileName;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATomatinaGameMode
+// ─────────────────────────────────────────────────────────────────────────────
 UCLASS()
 class TOMATO_API ATomatinaGameMode : public AGameModeBase
 {
@@ -21,56 +60,58 @@ class TOMATO_API ATomatinaGameMode : public AGameModeBase
 public:
 	ATomatinaGameMode();
 
+	virtual void BeginPlay() override;
+
 	// =========================================================================
-	// ミッション変数
+	// ミッション
 	// =========================================================================
 
-	/** 現在のお題 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Mission")
-	FName CurrentMission = FName("Gorilla");
-
-	/** 今回の撮影スコア */
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
-	int32 CurrentScore = 0;
-
-	/** 累計スコア */
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
-	int32 TotalScore = 0;
-
-	/** お題リスト（EditAnywhere で BP・エディタから設定可能） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Mission")
-	TArray<FName> MissionList;
+	/** エディタで設定するミッション一覧 */
+	UPROPERTY(EditAnywhere, Category="Tomatina|Mission")
+	TArray<FMissionData> Missions;
 
 	/** 現在のミッションインデックス */
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Mission")
-	int32 MissionIndex = 0;
+	int32 CurrentMissionIndex = 0;
 
-	/** リザルト表示秒数 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
-	float ResultDisplayTime = 2.0f;
+	/** 現在のお題タグ（CalculatePhotoScore に渡す） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Mission")
+	FName CurrentMission;
 
-	/** リザルトタイマーハンドル */
-	FTimerHandle ResultTimerHandle;
+	// =========================================================================
+	// スコア
+	// =========================================================================
 
-	/** リザルト表示中フラグ（二重撮影防止） */
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Result")
-	bool bIsShowingResult = false;
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
+	int32 CurrentScore = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
+	int32 TotalScore = 0;
 
 	// =========================================================================
 	// レンダーターゲット・画面サイズ
 	// =========================================================================
 
-	/** 撮影結果を保持する RenderTarget（リザルト画面に表示） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
 	UTextureRenderTarget2D* RT_Photo = nullptr;
 
-	/** iPhone 画面の横幅（ピクセル） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
 	float PhoneWidth = 1024.f;
 
-	/** iPhone 画面の縦幅（ピクセル） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
 	float PhoneHeight = 768.f;
+
+	// =========================================================================
+	// リザルト
+	// =========================================================================
+
+	/** リザルト表示秒数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
+	float ResultDisplayTime = 2.0f;
+
+	/** リザルト表示中フラグ（二重撮影防止） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Result")
+	bool bIsShowingResult = false;
 
 	// =========================================================================
 	// 関数
@@ -83,22 +124,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Tomatina|Photo")
 	void TakePhoto(USceneCaptureComponent2D* ZoomCamera);
 
-	/**
-	 * スコアに応じたコメントを返す。
-	 *   >= 100 → "全身バッチリ！"
-	 *   >=  50 → "上半身のみ！"
-	 *   >=  10 → "足だけ..."
-	 *   その他 → "映ってない！"
-	 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Tomatina|Score")
-	FString GetScoreComment(int32 Score) const;
-
-	/** 次のミッションへ進む */
+	/** 指定インデックスのミッションを開始する */
 	UFUNCTION(BlueprintCallable, Category="Tomatina|Mission")
-	void AdvanceMission();
+	void StartMission(int32 Index);
 
 protected:
-	/** ResultDisplayTime 経過後に呼ばれるタイマーコールバック */
+	/** ResultDisplayTime 経過後のタイマーコールバック */
 	UFUNCTION()
 	void OnResultTimerEnd();
+
+	/** 制限時間切れのタイマーコールバック */
+	UFUNCTION()
+	void OnMissionTimeUp();
+
+private:
+	FTimerHandle ResultTimerHandle;
+	FTimerHandle MissionTimerHandle;
+
+	UPROPERTY()
+	ATomatinaTargetSpawner* TargetSpawner = nullptr;
+
+	/** 全ミッション完了時の最終リザルト表示 */
+	void ShowFinalResult();
+
+	/** HUD を取得するヘルパー */
+	ATomatinaHUD* GetTomatinaHUD() const;
 };
