@@ -8,6 +8,7 @@
 #include "TomatinaHUD.generated.h"
 
 class UUserWidget;
+class UTexture2D;
 
 /**
  * ゲーム HUD。
@@ -121,8 +122,19 @@ public:
 	TSubclassOf<UUserWidget> MissionResultWidgetClass;
 
 	/**
-	 * ミッション開始時に「〇〇を撮れ！」テキストを表示する。
-	 * Widget 側は CurrentMissionText を Binding して描画すること。
+	 * ミッション開始時にお題テキストとターゲット画像を表示する。
+	 * MissionWidget の TXT_Mission テキストと IMG_TargetPreview 画像を更新し、
+	 * メインモニター右上（MainWidth - 500, 30）にサイズ (450×100) で配置する。
+	 *
+	 * @param MissionText  「〇〇を撮れ！」などのお題テキスト
+	 * @param TargetImage  ターゲットのプレビュー画像（nullptr 可）
+	 */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage);
+
+	/**
+	 * ミッション開始時に「〇〇を撮れ！」テキストのみを表示する。
+	 * 画像不要なときの後方互換用。内部で ShowMissionDisplay(Text, nullptr) を呼ぶ。
 	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void ShowMissionText(const FText& Text);

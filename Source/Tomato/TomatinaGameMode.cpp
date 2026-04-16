@@ -76,10 +76,10 @@ void ATomatinaGameMode::StartMission(int32 Index)
 		TEXT("ATomatinaGameMode::StartMission: Index=%d Type=%s"),
 		Index, *CurrentMission.ToString());
 
-	// HUD にお題テキストを表示
+	// HUD にお題テキストとプレビュー画像を表示
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
-		HUD->ShowMissionText(Mission.DisplayText);
+		HUD->ShowMissionDisplay(Mission.DisplayText, Mission.TargetImage);
 	}
 
 	// ターゲットをスポーン

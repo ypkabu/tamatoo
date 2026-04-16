@@ -3,6 +3,8 @@
 #include "TomatinaHUD.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "GameFramework/PlayerController.h"
 #include "TomatinaPlayerPawn.h"
 
@@ -206,33 +208,59 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::ShowMissionText(const FText& Text)
+void ATomatinaHUD::ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage)
 {
-	CurrentMissionText = Text;
+	CurrentMissionText = MissionText;
 
 	APlayerController* PC = GetOwningPlayerController();
 	if (!PC) { return; }
 
 	if (!MissionWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowMissionText: MissionWidgetClass が未設定"));
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::ShowMissionDisplay: MissionWidgetClass が未設定"));
 		return;
 	}
 
-	// 既存インスタンスがあればテキストだけ更新して終わる
-	if (MissionWidget)
+	// Widget がなければ生成
+	if (!MissionWidget)
 	{
-		MissionWidget->SetVisibility(ESlateVisibility::Visible);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::ShowMissionText: テキスト更新 '%s'"), *Text.ToString());
-		return;
-	}
+		MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
+		if (!MissionWidget)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD::ShowMissionDisplay: Widget 生成に失敗"));
+			return;
+		}
 
-	MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
-	if (MissionWidget)
-	{
 		MissionWidget->AddToViewport(250);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::ShowMissionText: Widget 生成 '%s'"), *Text.ToString());
 	}
+
+	// 右上に配置（MainWidth - 500, 30）、サイズ 450×100
+	const FVector2D Pos(MainWidth - 500.f, 30.f);
+	const FVector2D Size(450.f, 100.f);
+	MissionWidget->SetPositionInViewport(Pos, /*bRemoveDPIScale=*/false);
+	MissionWidget->SetDesiredSizeInViewport(Size);
+	MissionWidget->SetVisibility(ESlateVisibility::Visible);
+
+	// IMG_TargetPreview にプレビュー画像をセット
+	UImage* PreviewImg = Cast<UImage>(
+		MissionWidget->GetWidgetFromName(TEXT("IMG_TargetPreview")));
+	if (PreviewImg && TargetImage)
+	{
+		PreviewImg->SetBrushFromTexture(TargetImage);
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaHUD::ShowMissionDisplay: '%s' Image=%s"),
+		*MissionText.ToString(),
+		TargetImage ? *TargetImage->GetName() : TEXT("none"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionText(const FText& Text)
+{
+	ShowMissionDisplay(Text, nullptr);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
