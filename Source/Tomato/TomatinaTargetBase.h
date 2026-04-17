@@ -4,9 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "TomatinaTargetBase.generated.h"
-
-class UStaticMeshComponent;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 移動パターン
@@ -44,8 +43,8 @@ public:
 	FName MyType = FName("None");
 
 	/** 被写体のビジュアルメッシュ */
-	UPROPERTY(EditAnywhere, Category="Target")
-	UStaticMeshComponent* MeshComp;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target")
+	USkeletalMeshComponent* MeshComp;
 
 	// =========================================================================
 	// 移動パターン共通
