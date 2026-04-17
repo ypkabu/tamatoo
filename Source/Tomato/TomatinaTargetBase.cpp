@@ -2,7 +2,7 @@
 
 #include "TomatinaTargetBase.h"
 
-#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 // =============================================================================
 // コンストラクタ
@@ -12,7 +12,7 @@ ATomatinaTargetBase::ATomatinaTargetBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
+	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
 	SetRootComponent(MeshComp);
 }
 
