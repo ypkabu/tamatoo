@@ -3,6 +3,8 @@
 #include "TomatinaHUD.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "GameFramework/PlayerController.h"
 #include "TomatinaPlayerPawn.h"
 
@@ -12,6 +14,8 @@ ATomatinaHUD::ATomatinaHUD()
 	, CursorWidget(nullptr)
 	, DirtOverlayWidget(nullptr)
 	, ResultWidget(nullptr)
+	, MissionWidget(nullptr)
+	, MissionResultWidget(nullptr)
 {
 }
 
@@ -197,13 +201,115 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 {
 	CachedDirts = Dirts;
 
-	// 正規化座標 → 実座標の変換例（DirtOverlayWidget の Blueprint で使用）:
-	//   メイン画面座標 = NormalizedPosition * FVector2D(MainWidth, MainHeight)
-	//   Phone 画面座標 = NormalizedPosition * FVector2D(PhoneWidth, PhoneHeight)
-	//     + PhoneOrigin（Phone 表示左上のオフセット）
-	//
 	// DirtOverlayWidget は CachedDirts を Binding で参照し、
 	// 各要素の NormalizedPosition・Opacity・Size に基づいてスプラットを描画すること。
 
 	UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::UpdateDirtDisplay: 汚れ数=%d"), CachedDirts.Num());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage)
+{
+	CurrentMissionText = MissionText;
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) { return; }
+
+	if (!MissionWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::ShowMissionDisplay: MissionWidgetClass が未設定"));
+		return;
+	}
+
+	// Widget がなければ生成
+	if (!MissionWidget)
+	{
+		MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
+		if (!MissionWidget)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD::ShowMissionDisplay: Widget 生成に失敗"));
+			return;
+		}
+
+		MissionWidget->AddToViewport(250);
+	}
+
+	// 右上に配置（MainWidth - 500, 30）、サイズ 450×100
+	const FVector2D Pos(MainWidth - 500.f, 30.f);
+	const FVector2D Size(450.f, 100.f);
+	MissionWidget->SetPositionInViewport(Pos, /*bRemoveDPIScale=*/false);
+	MissionWidget->SetDesiredSizeInViewport(Size);
+	MissionWidget->SetVisibility(ESlateVisibility::Visible);
+
+	// IMG_TargetPreview にプレビュー画像をセット
+	UImage* PreviewImg = Cast<UImage>(
+		MissionWidget->GetWidgetFromName(TEXT("IMG_TargetPreview")));
+	if (PreviewImg && TargetImage)
+	{
+		PreviewImg->SetBrushFromTexture(TargetImage);
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaHUD::ShowMissionDisplay: '%s' Image=%s"),
+		*MissionText.ToString(),
+		TargetImage ? *TargetImage->GetName() : TEXT("none"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionText(const FText& Text)
+{
+	ShowMissionDisplay(Text, nullptr);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::HideMissionText()
+{
+	if (MissionWidget)
+	{
+		MissionWidget->SetVisibility(ESlateVisibility::Hidden);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionText: 非表示"));
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::ShowMissionResult(int32 Score, const FString& Comment)
+{
+	MissionResultScore   = Score;
+	MissionResultComment = Comment;
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) { return; }
+
+	if (!MissionResultWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::ShowMissionResult: MissionResultWidgetClass が未設定"));
+		return;
+	}
+
+	// 既存インスタンスがあれば再利用
+	if (!MissionResultWidget)
+	{
+		MissionResultWidget = CreateWidget<UUserWidget>(PC, MissionResultWidgetClass);
+		if (MissionResultWidget) { MissionResultWidget->AddToViewport(275); }
+	}
+
+	if (MissionResultWidget)
+	{
+		MissionResultWidget->SetVisibility(ESlateVisibility::Visible);
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaHUD::ShowMissionResult: Score=%d Comment=%s"), Score, *Comment);
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatinaHUD::HideMissionResult()
+{
+	if (MissionResultWidget)
+	{
+		MissionResultWidget->SetVisibility(ESlateVisibility::Hidden);
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionResult: 非表示"));
+	}
 }

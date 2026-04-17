@@ -10,14 +10,11 @@ class ATomatoDirtManager;
 class ATomatinaPlayerPawn;
 
 /**
- * LeapMotion の手の入力を受け取り、タオルの表示・拭き取り・耐久値を管理する。
+ * タオルの表示・拭き取り・耐久値を管理する。
  *
- * LeapMotion との接続（推奨：方法A）
- *   BP 派生クラスで LeapMotion プラグインのイベントを受けて
- *   bHandDetected / HandScreenPosition / HandSpeed を Set する。
- *     OnHandTracked  → bHandDetected = true
- *     OnHandLost     → bHandDetected = false
- *     OnHandMoved    → HandScreenPosition, HandSpeed を更新
+ * 手のデータは Blueprint から UpdateHandData() で渡す方式。
+ * BP 派生クラス側で Ultraleap の OnLeapHandMoved 等を受けて
+ * UpdateHandData(bDetected, ScreenPosition, Speed) を呼ぶこと。
  */
 UCLASS(Blueprintable)
 class TOMATO_API ATomatinaTowelSystem : public AActor
@@ -31,26 +28,42 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// =========================================================================
-	// LeapMotion 入力（BP から Set する）
+	// 手の状態（BP から UpdateHandData で更新）
 	// =========================================================================
 
 	/** LeapMotion の視野に手があるか */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	bool bHandDetected = false;
 
 	/**
 	 * 手の位置を 0〜1 の正規化座標に変換したもの。
-	 * LeapMotion の手の XY 座標を検出範囲で割って正規化して設定する。
+	 * BP 側で Ultraleap の Hand 座標を変換して渡すこと。
 	 */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	FVector2D HandScreenPosition = FVector2D(0.5f, 0.5f);
 
 	/**
-	 * 手の移動速度。LeapMotion のフレーム間差分から計算して設定する。
+	 * 手の移動速度。BP 側でフレーム間差分から計算して渡すこと。
 	 * 拭き取り効率に直結する。
 	 */
-	UPROPERTY(BlueprintReadWrite, Category="LeapMotion")
+	UPROPERTY(BlueprintReadOnly, Category="LeapMotion")
 	float HandSpeed = 0.0f;
+
+	// =========================================================================
+	// 手データ更新（BP から毎フレーム呼ぶ）
+	// =========================================================================
+
+	/**
+	 * BP 派生クラスから毎フレーム呼んで手のデータを渡す。
+	 * Ultraleap の OnLeapTrackingData 等でデータを受け取り
+	 * ここに流し込むことで C++ 側が SDK に依存しない構造になる。
+	 *
+	 * @param bDetected      手が検出されているか
+	 * @param ScreenPosition 手の位置（正規化座標 0〜1）
+	 * @param Speed          手の移動速度（正規化座標/秒）
+	 */
+	UFUNCTION(BlueprintCallable, Category="Towel")
+	void UpdateHandData(bool bDetected, FVector2D ScreenPosition, float Speed);
 
 	// =========================================================================
 	// タオル設定
@@ -128,17 +141,12 @@ public:
 	bool CheckTowelInView(FVector2D TowelNormPos);
 
 private:
-	/** レベル上の ATomatoDirtManager を取得（キャッシュ付き） */
 	ATomatoDirtManager* GetDirtManager();
-
-	/** 1P の PlayerPawn を取得（キャッシュ付き） */
 	ATomatinaPlayerPawn* GetPlayerPawn();
 
-	/** キャッシュ済み DirtManager */
 	UPROPERTY()
 	ATomatoDirtManager* CachedDirtManager;
 
-	/** キャッシュ済み PlayerPawn */
 	UPROPERTY()
 	ATomatinaPlayerPawn* CachedPlayerPawn;
 };
