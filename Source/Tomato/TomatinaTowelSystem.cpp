@@ -2,6 +2,7 @@
 
 #include "TomatinaTowelSystem.h"
 
+#include "Components/SceneCaptureComponent2D.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -32,7 +33,19 @@ void ATomatinaTowelSystem::BeginPlay()
 
 	CurrentDurability = MaxDurability;
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f"), CurrentDurability);
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f"), CurrentDurability);
+}
+
+// =============================================================================
+// UpdateHandData（BP から毎フレーム呼ぶ）
+// =============================================================================
+
+void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPosition, float Speed)
+{
+	bHandDetected      = bDetected;
+	HandScreenPosition = ScreenPosition;
+	HandSpeed          = Speed;
 }
 
 // =============================================================================
@@ -43,29 +56,24 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	ATomatinaHUD* HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
+	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
 
-	// ── 手が検出されていない ────────────────────────────────────────────────
+	// 手が検出されていない
 	if (!bHandDetected)
 	{
 		bTowelVisible    = false;
 		bTowelInZoomView = false;
 
-		if (HUD)
-		{
-			HUD->HideCursor();
-		}
+		if (HUD) { HUD->HideCursor(); }
 		return;
 	}
 
-	// ── 手検出中：タオルを表示 ───────────────────────────────────────────────
+	// 手検出中：タオルを表示
 	bTowelVisible = true;
 
 	if (HUD)
 	{
-		// HandScreenPosition（正規化）を HUD のカーソル座標（スクリーンピクセル）に変換して渡す
-		// 実際の画面サイズは HUD から取得する
 		const FVector2D ScreenPos(
 			HandScreenPosition.X * HUD->MainWidth,
 			HandScreenPosition.Y * HUD->MainHeight);
@@ -73,47 +81,45 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		HUD->ShowCursor();
 	}
 
-	// ── タオル交換中 ─────────────────────────────────────────────────────────
+	// タオル交換中
 	if (bIsSwapping)
 	{
+		bTowelInZoomView = false;
 		SwapTimer -= DeltaTime;
 		if (SwapTimer <= 0.f)
 		{
 			bIsSwapping       = false;
 			CurrentDurability = MaxDurability;
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
-			// HUD へ「交換完了」を通知（Widget で bIsSwapping を Binding して表示切替）
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
 		}
-		return;  // 交換中は拭けない
+		return;
 	}
 
-	// ── 拭き取り処理 ─────────────────────────────────────────────────────────
+	// 拭き取り処理
 	const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
 
 	if (bIsWiping)
 	{
-		// 耐久値を減らす
 		CurrentDurability -= DurabilityDrainRate * DeltaTime;
 
-		// DirtManager に漸進的な拭き取りを依頼
-		const float Efficiency = WipeEfficiency * HandSpeed * SpeedMultiplier;
+		const float Amount = WipeEfficiency * HandSpeed * SpeedMultiplier * DeltaTime;
 		if (ATomatoDirtManager* DirtMgr = GetDirtManager())
 		{
-			DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Efficiency * DeltaTime);
+			DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Amount);
 		}
 
-		// 耐久値切れ → タオル交換開始
 		if (CurrentDurability <= 0.f)
 		{
 			CurrentDurability = 0.f;
 			bIsSwapping       = true;
 			SwapTimer         = SwapDuration;
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTowelSystem: 耐久値切れ → タオル交換開始 (%.1f 秒)"), SwapDuration);
-			// HUD へ「タオル交換中」通知
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaTowelSystem: 耐久値切れ → タオル交換開始 (%.1f 秒)"), SwapDuration);
 		}
 	}
 
-	// ── ズーム映像へのタオル映り込み判定 ────────────────────────────────────
+	// ズーム映像へのタオル映り込み判定
 	bTowelInZoomView = CheckTowelInView(HandScreenPosition);
 }
 
@@ -124,23 +130,12 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 {
 	ATomatinaPlayerPawn* Pawn = GetPlayerPawn();
-	if (!Pawn || !Pawn->bIsZooming)
-	{
-		return false;
-	}
-
-	if (!Pawn->SceneCapture_Zoom)
-	{
-		return false;
-	}
+	if (!Pawn || !Pawn->bIsZooming)  { return false; }
+	if (!Pawn->SceneCapture_Zoom)    { return false; }
 
 	APlayerController* PC = Pawn->GetController<APlayerController>();
-	if (!PC)
-	{
-		return false;
-	}
+	if (!PC) { return false; }
 
-	// ズーム視界中心をスクリーン座標で取得し、正規化する
 	const FVector2D ZoomScreenCenter = UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
 		PC, Pawn->SceneCapture_Zoom, Pawn->MainWidth, Pawn->MainHeight);
 
@@ -148,10 +143,8 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 		ZoomScreenCenter.X / FMath::Max(Pawn->MainWidth,  1.f),
 		ZoomScreenCenter.Y / FMath::Max(Pawn->MainHeight, 1.f));
 
-	// 現在の FOV から視界の正規化半径を計算
-	// ZoomRatio が大きいほどズームが深く、視界が狭い
 	const float ZoomRatio    = Pawn->DefaultFOV
-	                           / FMath::Max(Pawn->SceneCapture_Zoom->FOVAngle, 1.f);
+	                           / FMath::Max<float>(Pawn->SceneCapture_Zoom->FOVAngle, 1.0f);
 	const float ViewHalfSize = 0.5f / ZoomRatio;
 
 	const bool bInView =
@@ -159,7 +152,8 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 		FMath::Abs(TowelNormPos.Y - NormZoomCenter.Y) < ViewHalfSize;
 
 	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaTowelSystem::CheckTowelInView: Towel=(%.2f,%.2f) ZoomCenter=(%.2f,%.2f) HalfSize=%.3f → %s"),
+		TEXT("ATomatinaTowelSystem::CheckTowelInView: "
+		     "Towel=(%.2f,%.2f) ZoomCenter=(%.2f,%.2f) HalfSize=%.3f → %s"),
 		TowelNormPos.X, TowelNormPos.Y,
 		NormZoomCenter.X, NormZoomCenter.Y,
 		ViewHalfSize,
@@ -176,12 +170,15 @@ ATomatoDirtManager* ATomatinaTowelSystem::GetDirtManager()
 {
 	if (!CachedDirtManager)
 	{
-		AActor* Found = UGameplayStatics::GetActorOfClass(GetWorld(), ATomatoDirtManager::StaticClass());
+		AActor* Found = UGameplayStatics::GetActorOfClass(
+			GetWorld(), ATomatoDirtManager::StaticClass());
 		CachedDirtManager = Cast<ATomatoDirtManager>(Found);
 
 		if (!CachedDirtManager)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTowelSystem::GetDirtManager: ATomatoDirtManager がレベル上に見つかりません"));
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaTowelSystem::GetDirtManager: "
+				     "ATomatoDirtManager がレベル上に見つかりません"));
 		}
 	}
 	return CachedDirtManager;
@@ -195,14 +192,17 @@ ATomatinaPlayerPawn* ATomatinaTowelSystem::GetPlayerPawn()
 {
 	if (!CachedPlayerPawn)
 	{
-		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		if (APlayerController* PC =
+			GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 		{
 			CachedPlayerPawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn());
 		}
 
 		if (!CachedPlayerPawn)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTowelSystem::GetPlayerPawn: ATomatinaPlayerPawn の取得に失敗"));
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaTowelSystem::GetPlayerPawn: "
+				     "ATomatinaPlayerPawn の取得に失敗"));
 		}
 	}
 	return CachedPlayerPawn;
