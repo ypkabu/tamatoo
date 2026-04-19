@@ -7,6 +7,17 @@
 #include "TomatinaProjectileSpawner.generated.h"
 
 class ATomatinaProjectile;
+class ATomatoThrower;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// スポーンモード
+// ─────────────────────────────────────────────────────────────────────────────
+UENUM(BlueprintType)
+enum class ETomatoSpawnMode : uint8
+{
+	IntervalRandom   UMETA(DisplayName="Interval Random"),    // 一定間隔ランダム（従来方式）
+	ThrowerAnimation UMETA(DisplayName="Thrower Animation"),  // 投げる人のアニメーション連動
+};
 
 /**
  * トマトを定期的にスポーンする。レベルに 1 個配置して使う。
@@ -21,7 +32,25 @@ class TOMATO_API ATomatinaProjectileSpawner : public AActor
 public:
 	ATomatinaProjectileSpawner();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
+
+	// =========================================================================
+	// スポーンモード
+	// =========================================================================
+
+	/** スポーンモード */
+	UPROPERTY(EditAnywhere, Category="Spawner")
+	ETomatoSpawnMode SpawnMode = ETomatoSpawnMode::IntervalRandom;
+
+	/**
+	 * ThrowerAnimation モード用。
+	 * レベルに配置した ATomatoThrower への参照（管理用）。
+	 * Thrower 自身が自分のタイミングで投げるため、
+	 * Spawner はこの配列で参照を保持するだけでよい。
+	 */
+	UPROPERTY(EditAnywhere, Category="Spawner|Thrower")
+	TArray<ATomatoThrower*> Throwers;
 
 	// =========================================================================
 	// スポーン設定
