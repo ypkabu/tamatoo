@@ -8,8 +8,6 @@
 
 class UStaticMeshComponent;
 class ATomatoDirtManager;
-class UParticleSystem;
-class USoundBase;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 飛行パターン
@@ -71,14 +69,6 @@ public:
 	/** 着弾汚れサイズの最大値（正規化座標系） */
 	UPROPERTY(EditAnywhere, Category="Tomato")
 	float SplatSizeMax = 0.15f;
-
-	/** 着弾時のパーティクルエフェクト（未設定時は省略） */
-	UPROPERTY(EditAnywhere, Category="Tomato")
-	UParticleSystem* SplatEffect;
-
-	/** 着弾時のサウンド（未設定時は省略） */
-	UPROPERTY(EditAnywhere, Category="Tomato")
-	USoundBase* SplatSound;
 
 	// =========================================================================
 	// 初期化

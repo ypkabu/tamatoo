@@ -4,13 +4,12 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/InputComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
-#include "EnhancedInputComponent.h"
-#include "EnhancedInputSubsystems.h"
-#include "Framework/Application/SlateApplication.h"
+#include "Kismet/KismetMathLibrary.h"
 
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaGameMode.h"
@@ -25,9 +24,11 @@ ATomatinaPlayerPawn::ATomatinaPlayerPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	// メインカメラ：ルートコンポーネントにアタッチ
 	PlayerCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("PlayerCamera"));
 	PlayerCamera->SetupAttachment(RootComponent);
 
+	// ズーム用 SceneCapture：PlayerCamera の子
 	SceneCapture_Zoom = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("SceneCapture_Zoom"));
 	SceneCapture_Zoom->SetupAttachment(PlayerCamera);
 	SceneCapture_Zoom->bCaptureEveryFrame = true;
@@ -42,61 +43,15 @@ void ATomatinaPlayerPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// モニター解像度を自動検出（PhoneWidth/PhoneHeight は副モニターがある場合のみ上書き）
-	FDisplayMetrics DM;
-	FSlateApplication::Get().GetDisplayMetrics(DM);
-	for (const FMonitorInfo& Monitor : DM.MonitorInfo)
+	if (GetWorld())
 	{
-		if (Monitor.bIsPrimary)
-		{
-			MainWidth  = static_cast<float>(Monitor.NativeWidth);
-			MainHeight = static_cast<float>(Monitor.NativeHeight);
-		}
-		else
-		{
-			PhoneWidth  = static_cast<float>(Monitor.NativeWidth);
-			PhoneHeight = static_cast<float>(Monitor.NativeHeight);
-		}
+		PC = GetWorld()->GetFirstPlayerController();
 	}
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaPlayerPawn::BeginPlay: Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
-		MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
 
-	PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::BeginPlay: PlayerController の取得に失敗"));
-		return;
 	}
-
-	// カスタムカーソル運用のためシステムカーソルは常時非表示
-	PC->bShowMouseCursor = false;
-
-	// GameAndUI：マウス位置トラッキングを有効化
-	FInputModeGameAndUI InputMode;
-	InputMode.SetHideCursorDuringCapture(false);
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	PC->SetInputMode(InputMode);
-
-	// Enhanced Input
-	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
-		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
-	{
-		if (DefaultMappingContext)
-		{
-			Subsystem->AddMappingContext(DefaultMappingContext, 0);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::BeginPlay: DefaultMappingContext 未設定"));
-		}
-	}
-
-	// 初期化
-	ZoomAlpha       = 0.f;
-	bIsZooming      = false;
-	bZoomComplete   = false;
-	bCursorCentered = false;
 }
 
 // =============================================================================
@@ -107,26 +62,15 @@ void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInput
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent);
-	if (!EIC)
+	if (!PlayerInputComponent)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::SetupPlayerInputComponent: EIC が取得できません"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::SetupPlayerInputComponent: PlayerInputComponent が null"));
 		return;
 	}
 
-	if (IA_RightMouse)
-	{
-		EIC->BindAction(IA_RightMouse, ETriggerEvent::Started,   this, &ATomatinaPlayerPawn::OnRightMousePressed);
-		EIC->BindAction(IA_RightMouse, ETriggerEvent::Completed, this, &ATomatinaPlayerPawn::OnRightMouseReleased);
-	}
-	if (IA_LeftMouse)
-	{
-		EIC->BindAction(IA_LeftMouse, ETriggerEvent::Started, this, &ATomatinaPlayerPawn::OnLeftMousePressed);
-	}
-	if (IA_Look)
-	{
-		EIC->BindAction(IA_Look, ETriggerEvent::Triggered, this, &ATomatinaPlayerPawn::OnLook);
-	}
+	PlayerInputComponent->BindAction("RightMouseButton", IE_Pressed,  this, &ATomatinaPlayerPawn::OnRightMousePressed);
+	PlayerInputComponent->BindAction("RightMouseButton", IE_Released, this, &ATomatinaPlayerPawn::OnRightMouseReleased);
+	PlayerInputComponent->BindAction("LeftMouseButton",  IE_Pressed,  this, &ATomatinaPlayerPawn::OnLeftMousePressed);
 }
 
 // =============================================================================
@@ -137,40 +81,52 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!PC || !SceneCapture_Zoom) { return; }
+	if (!PC || !SceneCapture_Zoom)
+	{
+		return;
+	}
 
-	// ZoomAlpha 補間
+	// ------------------------------------------------------------------
+	// ZoomAlpha 補間（FInterpTo は速度スケールが大きいほど速い）
+	// ------------------------------------------------------------------
 	const float InterpSpeed = ZoomSpeed * 10.f;
-	ZoomAlpha = FMath::FInterpTo(ZoomAlpha, bIsZooming ? 1.0f : 0.0f, DeltaTime, InterpSpeed);
 
-	// FOV と位置
-	SceneCapture_Zoom->FOVAngle = FMath::Lerp(DefaultFOV, ZoomFOV, ZoomAlpha);
-	SceneCapture_Zoom->SetRelativeLocation(
-		FMath::Lerp(FVector::ZeroVector, TargetOffset, ZoomAlpha));
+	if (bIsZooming)
+	{
+		ZoomAlpha = FMath::FInterpTo(ZoomAlpha, 1.0f, DeltaTime, InterpSpeed);
+	}
+	else
+	{
+		ZoomAlpha = FMath::FInterpTo(ZoomAlpha, 0.0f, DeltaTime, InterpSpeed);
+	}
 
-	// 0.95：カーソル中央移動
+	// ------------------------------------------------------------------
+	// FOV と SceneCapture 位置を ZoomAlpha で更新
+	// ------------------------------------------------------------------
+	const float CurrentFOV = FMath::Lerp(DefaultFOV, ZoomFOV, ZoomAlpha);
+	SceneCapture_Zoom->FOVAngle = CurrentFOV;
+
+	const FVector CurrentOffset = FMath::Lerp(FVector::ZeroVector, TargetOffset, ZoomAlpha);
+	SceneCapture_Zoom->SetRelativeLocation(CurrentOffset);
+
+	// ------------------------------------------------------------------
+	// ZoomAlpha >= 0.95：カーソルを iPhone 中央に移動（一度だけ）
+	// ------------------------------------------------------------------
 	if (ZoomAlpha >= 0.95f && !bCursorCentered && bIsZooming)
 	{
 		bCursorCentered = true;
 
-		FVector2D Center;
-		if (bTestMode)
-		{
-			// テストモード：メインモニター中央
-			Center = FVector2D(MainWidth * 0.5f, MainHeight * 0.5f);
-		}
-		else
-		{
-			// 本番：iPhone 画面中央（GetZoomScreenCenter は Phone 画面中心を返す）
-			Center = UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
-		}
+		const FVector2D Center = UTomatinaFunctionLibrary::GetZoomScreenCenter(
+			MainWidth, PhoneWidth, PhoneHeight);
 		PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
 
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソル中央へ (%.0f, %.0f)"),
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央へ移動 (%.0f, %.0f)"),
 			Center.X, Center.Y);
 	}
 
-	// 0.99：ズーム完了
+	// ------------------------------------------------------------------
+	// ZoomAlpha >= 0.99：ズーム完了（Timeline Finished 相当）
+	// ------------------------------------------------------------------
 	if (ZoomAlpha >= 0.99f && bIsZooming && !bZoomComplete)
 	{
 		bZoomComplete = true;
@@ -179,30 +135,40 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了"));
 	}
 
+	// ------------------------------------------------------------------
 	// ズーム中：HUD のカーソル位置を更新
+	// ------------------------------------------------------------------
 	if (bIsZooming)
 	{
 		const FVector2D CursorPos = UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
 			PC, SceneCapture_Zoom, MainWidth, MainHeight);
 
-		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
+		ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
+		if (HUD)
 		{
 			HUD->UpdateCursorPosition(CursorPos);
 		}
 	}
 
-	// ズーム完了後：マウスルック
+	// ------------------------------------------------------------------
+	// ズーム完了後：マウス入力でカメラをパン
+	// ------------------------------------------------------------------
 	if (bZoomComplete)
 	{
+		const float DeltaX = PC->GetInputAxisValue(TEXT("Turn"));
+		const float DeltaY = PC->GetInputAxisValue(TEXT("LookUp"));
+
 		const FVector Offset(
 			0.f,
-			CurrentLookInput.X * MoveSpeed * DeltaTime * -1.f,
-			CurrentLookInput.Y * MoveSpeed * DeltaTime);
+			DeltaX * MoveSpeed * DeltaTime * -1.f,
+			DeltaY * MoveSpeed * DeltaTime);
+
 		SceneCapture_Zoom->AddLocalOffset(Offset);
-		CurrentLookInput = FVector2D::ZeroVector;
 	}
 
-	// ズーム解除完了でリセット
+	// ------------------------------------------------------------------
+	// ズーム解除が完了（ZoomAlpha ≈ 0）したらリセット
+	// ------------------------------------------------------------------
 	if (!bIsZooming && ZoomAlpha < 0.01f)
 	{
 		SceneCapture_Zoom->SetRelativeLocation(FVector::ZeroVector);
@@ -211,119 +177,145 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 }
 
 // =============================================================================
-// 右クリック押下：ズーム開始
+// 右クリック押下
 // =============================================================================
 
 void ATomatinaPlayerPawn::OnRightMousePressed()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: RightMouse Pressed"));
+	if (!PC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: PC が null"));
+		return;
+	}
+	if (!PlayerCamera)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: PlayerCamera が null"));
+		return;
+	}
 
-	if (!PC || !PlayerCamera) { return; }
-
+	// マウス位置の取得
 	float MouseX = 0.f, MouseY = 0.f;
 	if (!PC->GetMousePosition(MouseX, MouseY))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: マウス位置取得失敗"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: マウス位置の取得に失敗"));
 		return;
 	}
 
+	// スクリーン座標 → ワールドの Ray に変換
 	FVector WorldLocation, WorldDirection;
 	if (!PC->DeprojectScreenPositionToWorld(MouseX, MouseY, WorldLocation, WorldDirection))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: Deproject 失敗"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: DeprojectScreenPositionToWorld に失敗"));
 		return;
 	}
 
+	// ライントレース（Visibility チャンネル）
 	FHitResult HitResult;
-	FCollisionQueryParams QP;
-	QP.AddIgnoredActor(this);
+	const FVector TraceEnd = WorldLocation + WorldDirection * 100000.f;
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
 
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(
-		HitResult, WorldLocation, WorldLocation + WorldDirection * 100000.f, ECC_Visibility, QP);
+		HitResult,
+		WorldLocation,
+		TraceEnd,
+		ECC_Visibility,
+		QueryParams);
 
 	if (!bHit)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ヒットなし → ズームキャンセル"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: ヒットなし → ズームキャンセル"));
 		return;
 	}
 
+	// ズームオフセット計算
 	TargetOffset = UTomatinaFunctionLibrary::CalculateZoomOffset(
 		PC, HitResult, PlayerCamera, PlayerCamera->FieldOfView);
 
-	bIsZooming      = true;
-	bZoomComplete   = false;
+	// ズーム開始
+	bIsZooming     = true;
+	bZoomComplete  = false;
 	bCursorCentered = false;
+	ZoomAlpha      = 0.0f;
 
-	if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
+	// カーソル Widget を表示
+	ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
+	if (HUD)
 	{
 		HUD->ShowCursor();
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ズーム開始 Offset=(%.1f,%.1f,%.1f)"),
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: ズーム開始 Offset=(%.1f, %.1f, %.1f)"),
 		TargetOffset.X, TargetOffset.Y, TargetOffset.Z);
 }
 
 // =============================================================================
-// 右クリック解放：ズーム解除
+// 右クリック解放
 // =============================================================================
 
 void ATomatinaPlayerPawn::OnRightMouseReleased()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: RightMouse Released"));
-
 	bIsZooming      = false;
 	bZoomComplete   = false;
 	bCursorCentered = false;
 
+	// ZoomAlpha は Tick で 0 に向かって補間される（逆再生）
+
 	if (PC)
 	{
+		// マウスカーソルを再表示
 		PC->bShowMouseCursor = true;
+
+		// 入力モードを GameAndUI に戻す
 		FInputModeGameAndUI InputMode;
 		InputMode.SetHideCursorDuringCapture(false);
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		PC->SetInputMode(InputMode);
 
-		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
+		// カーソル Widget を非表示
+		ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
+		if (HUD)
 		{
 			HUD->HideCursor();
 		}
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMouseReleased: ズーム解除"));
 }
 
 // =============================================================================
-// 左クリック押下：撮影
+// 左クリック押下
 // =============================================================================
 
 void ATomatinaPlayerPawn::OnLeftMousePressed()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: LeftMouse Pressed, bIsZooming=%d"), bIsZooming ? 1 : 0);
+	if (!bIsZooming)
+	{
+		// ズーム中でなければ撮影しない
+		return;
+	}
 
-	if (!bIsZooming) { return; }
-	if (!GetWorld()) { return; }
+	if (!GetWorld())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: GetWorld() が null"));
+		return;
+	}
 
 	ATomatinaGameMode* GameMode = Cast<ATomatinaGameMode>(
 		UGameplayStatics::GetGameMode(GetWorld()));
 
 	if (!GameMode)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnLeftMousePressed: GameMode の取得に失敗"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: ATomatinaGameMode の取得に失敗"));
 		return;
 	}
+
 	if (!SceneCapture_Zoom)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnLeftMousePressed: SceneCapture_Zoom が null"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: SceneCapture_Zoom が null"));
 		return;
 	}
 
 	GameMode->TakePhoto(SceneCapture_Zoom);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: TakePhoto called"));
-}
-
-// =============================================================================
-// マウス Look
-// =============================================================================
-
-void ATomatinaPlayerPawn::OnLook(const FInputActionValue& Value)
-{
-	CurrentLookInput = Value.Get<FVector2D>();
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: TakePhoto 呼び出し完了"));
 }

@@ -9,19 +9,12 @@
 
 class UUserWidget;
 class UTexture2D;
-class UTextBlock;
-class UImage;
-class UCanvasPanel;
-class UMaterialInterface;
 
 /**
  * ゲーム HUD。
- * C++ は位置・サイズ制御を行わない。
- * Widget の生成・AddToViewport・中身テキスト/画像更新・Visibility 切替のみ行う。
- *
- * 例外:
- *  - UpdateCursorPosition（IMG_Crosshair のスロット位置を更新）
- *  - UpdateDirtDisplay（汚れは動的生成で座標管理が必須）
+ * 全 Widget の生成・配置・更新を C++ で管理する。
+ * Widget Blueprint 自体はエディタで見た目を作るが、
+ * いつ・どこに表示するかは全て C++ で制御。
  */
 UCLASS()
 class TOMATO_API ATomatinaHUD : public AHUD
@@ -32,58 +25,29 @@ public:
 	ATomatinaHUD();
 
 	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaTime) override;
 
 	// =========================================================================
-	// Widget クラス参照（BP の Details で設定）
+	// Widget クラス参照（BP で設定）
 	// =========================================================================
 
+	/** ビューファインダー Widget */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> ViewFinderWidgetClass;
 
+	/** ズームカーソル Widget */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> CursorWidgetClass;
 
+	/** 汚れオーバーレイ Widget */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> DirtOverlayWidgetClass;
 
+	/** リザルト Widget */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> ResultWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
-	TSubclassOf<UUserWidget> MissionWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
-	TSubclassOf<UUserWidget> MissionResultWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
-	TSubclassOf<UUserWidget> FinalResultWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
-	TSubclassOf<UUserWidget> FlashWidgetClass;
-
-	/** テストモード用 PiP Widget（WBP_TestPip） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
-	TSubclassOf<UUserWidget> TestPipWidgetClass;
-
 	// =========================================================================
-	// マテリアル（BP の Details で設定）
-	// =========================================================================
-
-	/** ResultWidget の IMG_Photo に適用するマテリアル（M_PhotoDisplay） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Materials")
-	UMaterialInterface* PhotoDisplayMaterial;
-
-	/** ViewFinder/TestPip の IMG_ZoomView に適用するマテリアル（M_ZoomDisplay） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Materials")
-	UMaterialInterface* ZoomDisplayMaterial;
-
-	/** 汚れテクスチャ */
-	UPROPERTY(EditAnywhere, Category="HUD|Dirt")
-	UTexture2D* DirtTexture;
-
-	// =========================================================================
-	// 画面サイズ（PlayerPawn から取得。TowelSystem 等が参照する）
+	// 画面サイズ（PlayerPawn から取得）
 	// =========================================================================
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
@@ -99,18 +63,25 @@ public:
 	float PhoneHeight = 768.f;
 
 	// =========================================================================
-	// カーソル
+	// カーソル操作
 	// =========================================================================
 
+	/**
+	 * ズームカーソルの画面座標を更新する。
+	 * Widget は CurrentCursorPosition を参照して描画位置を決める。
+	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Cursor")
 	void UpdateCursorPosition(FVector2D Pos);
 
+	/** カーソル Widget を表示する */
 	UFUNCTION(BlueprintCallable, Category="HUD|Cursor")
 	void ShowCursor();
 
+	/** カーソル Widget を非表示にする */
 	UFUNCTION(BlueprintCallable, Category="HUD|Cursor")
 	void HideCursor();
 
+	/** 現在のカーソル座標（Widget の Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Cursor")
 	FVector2D CurrentCursorPosition;
 
@@ -118,105 +89,123 @@ public:
 	// リザルト
 	// =========================================================================
 
+	/**
+	 * リザルト Widget を動的生成して表示する。
+	 * @param Score    スコア（0〜100）
+	 * @param Comment  スコアコメント文字列
+	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
 	void ShowResult(int32 Score, const FString& Comment);
 
+	/** リザルト Widget を非表示にして破棄する */
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
 	void HideResult();
 
+	/** 直近スコア（Widget Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Result")
 	int32 LastScore = 0;
 
+	/** 直近コメント（Widget Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Result")
 	FString LastComment;
 
 	// =========================================================================
-	// ミッション
+	// ミッション表示
 	// =========================================================================
 
+	/** ミッションテキスト Widget のクラス（WBP_MissionDisplay を設定） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> MissionWidgetClass;
+
+	/** ミッション結果（時間切れなど）の一時表示 Widget のクラス */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> MissionResultWidgetClass;
+
+	/**
+	 * ミッション開始時にお題テキストとターゲット画像を表示する。
+	 * MissionWidget の TXT_Mission テキストと IMG_TargetPreview 画像を更新し、
+	 * メインモニター右上（MainWidth - 500, 30）にサイズ (450×100) で配置する。
+	 *
+	 * @param MissionText  「〇〇を撮れ！」などのお題テキスト
+	 * @param TargetImage  ターゲットのプレビュー画像（nullptr 可）
+	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage);
 
+	/**
+	 * ミッション開始時に「〇〇を撮れ！」テキストのみを表示する。
+	 * 画像不要なときの後方互換用。内部で ShowMissionDisplay(Text, nullptr) を呼ぶ。
+	 */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void ShowMissionText(const FText& Text);
+
+	/** ミッションテキスト Widget をフェードアウトして非表示にする */
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void HideMissionText();
 
+	/**
+	 * 制限時間切れ・次ミッション移行時のスコアとコメントを一時表示する。
+	 * @param Score    スコア（0 なら「時間切れ！」）
+	 * @param Comment  表示コメント文字列
+	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void ShowMissionResult(int32 Score, const FString& Comment);
 
+	/** ミッション結果の一時表示 Widget を非表示にする */
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void HideMissionResult();
 
+	/** 現在のミッションテキスト（MissionWidget の Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
 	FText CurrentMissionText;
 
+	/** ミッション結果スコア（MissionResultWidget の Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
 	int32 MissionResultScore = 0;
 
+	/** ミッション結果コメント（MissionResultWidget の Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Mission")
 	FString MissionResultComment;
 
 	// =========================================================================
-	// タイマー／スコア
+	// 汚れ表示
 	// =========================================================================
 
-	UFUNCTION(BlueprintCallable, Category="HUD|Timer")
-	void UpdateTimer(float RemainingSeconds);
-
-	UFUNCTION(BlueprintCallable, Category="HUD|Score")
-	void UpdateTotalScore(int32 TotalScore);
-
-	UPROPERTY(BlueprintReadOnly, Category="HUD|Score")
-	int32 CurrentTotalScore = 0;
-
-	// =========================================================================
-	// シャッターフラッシュ
-	// =========================================================================
-
-	UFUNCTION(BlueprintCallable, Category="HUD|Flash")
-	void PlayShutterFlash();
-
-	// =========================================================================
-	// 最終リザルト
-	// =========================================================================
-
-	UFUNCTION(BlueprintCallable, Category="HUD|Result")
-	void ShowFinalResult(int32 TotalScore, int32 MissionCount);
-
-	// =========================================================================
-	// 汚れ
-	// =========================================================================
-
+	/**
+	 * 汚れ Widget を最新の汚れリストで更新する。
+	 * 汚れの正規化座標からメイン・Phone 両画面の実座標を計算して配置する。
+	 * DirtOverlayWidget は Blueprint 側で CachedDirts を参照して描画する。
+	 * @param Dirts  ATomatoDirtManager::GetActiveDirts() の戻り値
+	 */
 	UFUNCTION(BlueprintCallable, Category="HUD|Dirt")
 	void UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts);
 
+	/** 最新の汚れデータ（DirtOverlay Widget の Binding 用） */
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Dirt")
 	TArray<FDirtSplat> CachedDirts;
 
-	// =========================================================================
-	// タオル
-	// =========================================================================
-
-	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
-	void UpdateTowelStatus(float DurabilityPercent, bool bSwapping);
-
 protected:
-	UPROPERTY() UUserWidget* ViewFinderWidget;
-	UPROPERTY() UUserWidget* CursorWidget;
-	UPROPERTY() UUserWidget* DirtOverlayWidget;
-	UPROPERTY() UUserWidget* ResultWidget;
-	UPROPERTY() UUserWidget* MissionWidget;
-	UPROPERTY() UUserWidget* MissionResultWidget;
-	UPROPERTY() UUserWidget* FinalResultWidget;
-	UPROPERTY() UUserWidget* FlashWidget;
-	UPROPERTY() UUserWidget* TestPipWidget;
+	/** ビューファインダー Widget インスタンス */
+	UPROPERTY()
+	UUserWidget* ViewFinderWidget;
 
-private:
-	FTimerHandle FlashTimerHandle;
-	float        FlashAlpha = 0.0f;
+	/** カーソル Widget インスタンス */
+	UPROPERTY()
+	UUserWidget* CursorWidget;
 
-	ATomatoDirtManager* GetDirtManager();
-	UPROPERTY() ATomatoDirtManager* CachedDirtManager;
+	/** 汚れオーバーレイ Widget インスタンス */
+	UPROPERTY()
+	UUserWidget* DirtOverlayWidget;
 
-	/** Widget 内の Image/Material 初期化（IMG_ZoomView に ZoomDisplayMaterial を設定） */
-	void ApplyZoomMaterial(UUserWidget* Widget);
+	/** リザルト Widget インスタンス（ShowResult で生成、HideResult で破棄） */
+	UPROPERTY()
+	UUserWidget* ResultWidget;
+
+	/** ミッションテキスト Widget インスタンス（ShowMissionText で生成） */
+	UPROPERTY()
+	UUserWidget* MissionWidget;
+
+	/** ミッション結果 Widget インスタンス（ShowMissionResult で生成、HideMissionResult で破棄） */
+	UPROPERTY()
+	UUserWidget* MissionResultWidget;
 };
