@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/Epic Games//**)",
+      "Read(//c/Program Files/Epic Games/**)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat\" TomatoEditor Win64 Development -Project=\"C:/Users/zhush/Documents/Unreal Projects/tamatoo/Tomato.uproject\" -WaitMutex -NoHotReload)",
+      "Bash(cmd //c \"\\\\\"C:\\\\\\\\Program Files\\\\\\\\Epic Games\\\\\\\\UE_5.7\\\\\\\\Engine\\\\\\\\Build\\\\\\\\BatchFiles\\\\\\\\Build.bat\\\\\" TomatoEditor Win64 Development -Project=\\\\\"C:/Users/zhush/Documents/Unreal Projects/tamatoo/Tomato.uproject\\\\\" -WaitMutex -NoHotReload 2>&1\")",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' TomatoEditor Win64 Development '-Project=C:/Users/zhush/Documents/Unreal Projects/tamatoo/Tomato.uproject' -WaitMutex -NoHotReload)",
+      "Bash(cmd //c _build_tmp.bat)"
+    ]
+  }
+}
