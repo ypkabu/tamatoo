@@ -71,47 +71,51 @@ namespace TomatinaInternal
 bool UTomatinaFunctionLibrary::CheckVisibility(
 	USceneCaptureComponent2D* ZoomCamera,
 	AActor* TargetActor,
-	float PhoneWidth,
-	float PhoneHeight)
+	FVector CheckLocation,
+	float ScreenWidth,
+	float ScreenHeight)
 {
-	if (!ZoomCamera || !TargetActor)
+	if (!ZoomCamera || !TargetActor || !ZoomCamera->GetWorld()) { return false; }
+
+	const FVector  CamLoc = ZoomCamera->GetComponentLocation();
+	const FRotator CamRot = ZoomCamera->GetComponentRotation();
+	const float    FOV    = ZoomCamera->FOVAngle;
+
+	const FVector ToTarget = CheckLocation - CamLoc;
+	const FVector Forward  = CamRot.Vector();
+	const FVector Right    = FRotationMatrix(CamRot).GetScaledAxis(EAxis::Y);
+	const FVector Up       = FRotationMatrix(CamRot).GetScaledAxis(EAxis::Z);
+
+	const float LocalX = FVector::DotProduct(ToTarget, Forward);
+	const float LocalY = FVector::DotProduct(ToTarget, Right);
+	const float LocalZ = FVector::DotProduct(ToTarget, Up);
+
+	if (LocalX <= 1.0f) { return false; }
+
+	const float AspectRatio = (ScreenHeight > 0.f) ? ScreenWidth / ScreenHeight : 1.f;
+	const float TanHalfFOV  = FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
+
+	const float ScreenNDC_X = (LocalY / LocalX) / TanHalfFOV;
+	const float ScreenNDC_Y = (LocalZ / LocalX) / (TanHalfFOV / AspectRatio);
+
+	if (FMath::Abs(ScreenNDC_X) > 1.0f || FMath::Abs(ScreenNDC_Y) > 1.0f) { return false; }
+
+	// 遮蔽チェック：ラインレース
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(ZoomCamera->GetOwner());
+
+	const bool bHit = ZoomCamera->GetWorld()->LineTraceSingleByChannel(
+		Hit, CamLoc, CheckLocation, ECC_Visibility, Params);
+
+	if (!bHit) { return true; }
+
+	// ヒットしたアクターがターゲット本体、またはその子なら可視
+	AActor* HitActor = Hit.GetActor();
+	while (HitActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CheckVisibility: ZoomCamera または TargetActor が null"));
-		return false;
-	}
-
-	FMatrix ViewMatrix;
-	float CotHalfFOV, Aspect;
-	TomatinaInternal::BuildViewParams(ZoomCamera, PhoneWidth, PhoneHeight, ViewMatrix, CotHalfFOV, Aspect);
-
-	// バウンドボックスの 8 頂点を取得
-	FVector Origin, Extent;
-	TargetActor->GetActorBounds(false, Origin, Extent);
-
-	const FVector Corners[8] =
-	{
-		Origin + FVector( Extent.X,  Extent.Y,  Extent.Z),
-		Origin + FVector(-Extent.X,  Extent.Y,  Extent.Z),
-		Origin + FVector( Extent.X, -Extent.Y,  Extent.Z),
-		Origin + FVector(-Extent.X, -Extent.Y,  Extent.Z),
-		Origin + FVector( Extent.X,  Extent.Y, -Extent.Z),
-		Origin + FVector(-Extent.X,  Extent.Y, -Extent.Z),
-		Origin + FVector( Extent.X, -Extent.Y, -Extent.Z),
-		Origin + FVector(-Extent.X, -Extent.Y, -Extent.Z),
-	};
-
-	// 1 頂点でも NDC（-1〜1）の内側に入れば可視
-	for (const FVector& Corner : Corners)
-	{
-		const FVector LocalPos = ViewMatrix.TransformPosition(Corner);
-		FVector2D NDC;
-		if (!TomatinaInternal::LocalToNDC(LocalPos, CotHalfFOV, Aspect, NDC)) continue;
-
-		if (NDC.X >= -1.f && NDC.X <= 1.f &&
-			NDC.Y >= -1.f && NDC.Y <= 1.f)
-		{
-			return true;
-		}
+		if (HitActor == TargetActor) { return true; }
+		HitActor = HitActor->GetOwner();
 	}
 
 	return false;
@@ -150,7 +154,7 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	{
 		if (!IsValid(Target))                    { continue; }
 		if (Target->MyType != CurrentMission)    { continue; }
-		if (!CheckVisibility(ZoomCamera, Target, ScreenWidth, ScreenHeight)) { continue; }
+		if (!CheckVisibility(ZoomCamera, Target, Target->GetActorLocation(), ScreenWidth, ScreenHeight)) { continue; }
 
 		// バウンドボックス 8 頂点を NDC に投影して最小・最大矩形を求める
 		FVector Origin, Extent;

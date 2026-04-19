@@ -11,6 +11,7 @@
 
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaHUD.h"
+#include "TomatinaPlayerPawn.h"
 #include "TomatinaTowelSystem.h"
 #include "TomatinaTargetSpawner.h"
 
@@ -20,6 +21,7 @@
 
 ATomatinaGameMode::ATomatinaGameMode()
 {
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 // =============================================================================
@@ -52,8 +54,76 @@ void ATomatinaGameMode::BeginPlay()
 		ShuffleMissions();
 	}
 
+	// PlayerPawn から Phone サイズを同期
+	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	{
+		if (ATomatinaPlayerPawn* Pawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn()))
+		{
+			PhoneWidth  = Pawn->PhoneWidth;
+			PhoneHeight = Pawn->PhoneHeight;
+			UE_LOG(LogTemp, Log,
+				TEXT("ATomatinaGameMode::BeginPlay: Phone サイズ取得 (%.0fx%.0f)"),
+				PhoneWidth, PhoneHeight);
+		}
+	}
+
 	// 最初のミッション開始
 	StartMission(0);
+}
+
+// =============================================================================
+// Tick
+// =============================================================================
+
+void ATomatinaGameMode::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// ── カウントダウン中 ─────────────────────────────────────────────────────
+	if (bInCountdown)
+	{
+		CountdownRemaining -= DeltaSeconds;
+
+		const int32 Current = FMath::CeilToInt(CountdownRemaining);
+		if (Current != LastCountdownSecond && Current > 0)
+		{
+			LastCountdownSecond = Current;
+			if (ATomatinaHUD* HUD = GetTomatinaHUD())
+			{
+				HUD->ShowCountdown(Current);
+			}
+		}
+
+		if (CountdownRemaining <= 0.0f)
+		{
+			bInCountdown = false;
+			if (ATomatinaHUD* HUD = GetTomatinaHUD())
+			{
+				HUD->HideCountdown();
+			}
+			StartMission(0);
+		}
+		return;
+	}
+
+	if (bIsShowingResult) { return; }
+
+	// ── ミッション残り時間を更新 ─────────────────────────────────────────────
+	if (RemainingTime > 0.0f)
+	{
+		RemainingTime -= DeltaSeconds;
+
+		if (ATomatinaHUD* HUD = GetTomatinaHUD())
+		{
+			HUD->UpdateTimer(FMath::Max(0.0f, RemainingTime));
+		}
+
+		if (RemainingTime <= 0.0f)
+		{
+			RemainingTime = -1.0f;
+			OnMissionTimeUp();
+		}
+	}
 }
 
 // =============================================================================
@@ -88,17 +158,9 @@ void ATomatinaGameMode::StartMission(int32 Index)
 		TargetSpawner->SpawnTargetsForMission(Mission);
 	}
 
-	// 制限時間タイマー開始（前のタイマーをクリアしてから）
-	GetWorld()->GetTimerManager().ClearTimer(MissionTimerHandle);
-	if (Mission.TimeLimit > 0.0f)
-	{
-		GetWorld()->GetTimerManager().SetTimer(
-			MissionTimerHandle,
-			this,
-			&ATomatinaGameMode::OnMissionTimeUp,
-			Mission.TimeLimit,
-			false);
-	}
+	// 制限時間を Tick ベースで管理（RemainingTime に設定）
+	RemainingTime = (Mission.TimeLimit > 0.0f) ? Mission.TimeLimit : -1.0f;
+	GetWorld()->GetTimerManager().ClearTimer(MissionTimerHandle); // 旧タイマーをクリア
 }
 
 // =============================================================================
@@ -107,6 +169,8 @@ void ATomatinaGameMode::StartMission(int32 Index)
 
 void ATomatinaGameMode::OnMissionTimeUp()
 {
+	RemainingTime = -1.0f;  // Tick からの二重発火防止
+
 	UE_LOG(LogTemp, Warning,
 		TEXT("ATomatinaGameMode::OnMissionTimeUp: 時間切れ Index=%d"),
 		CurrentMissionIndex);
@@ -181,7 +245,8 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	UE_LOG(LogTemp, Warning,
 		TEXT("ATomatinaGameMode::TakePhoto: Score=%d TotalScore=%d"), Score, TotalScore);
 
-	// ③ 制限時間タイマーを止める
+	// ③ ミッション残り時間リセット
+	RemainingTime = -1.0f;
 	GetWorld()->GetTimerManager().ClearTimer(MissionTimerHandle);
 
 	// ④ 撮影成功（Score > 0）なら最高貢献ターゲットを消す
@@ -196,10 +261,12 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	// ⑥ リザルトフラグを立てる
 	bIsShowingResult = true;
 
-	// ⑦ HUD にリザルト表示を依頼
+	// ⑦ HUD にリザルト・フラッシュ・スコアを一括通知
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
+		HUD->PlayShutterFlash();
 		HUD->ShowResult(Score, Comment);
+		HUD->UpdateTotalScore(TotalScore);
 	}
 
 	// ⑧ リザルトタイマーをセット
@@ -244,9 +311,7 @@ void ATomatinaGameMode::ShowFinalResult()
 
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
-		const FString Comment = FString::Printf(
-			TEXT("ゲーム終了！合計スコア: %d"), TotalScore);
-		HUD->ShowResult(TotalScore, Comment);
+		HUD->ShowFinalResult(TotalScore, Missions.Num());
 	}
 }
 

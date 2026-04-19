@@ -9,6 +9,11 @@
 
 class UUserWidget;
 class UTexture2D;
+class UTextBlock;
+class UImage;
+class UCanvasPanel;
+class UProgressBar;
+class UMaterialInterface;
 
 /**
  * ゲーム HUD。
@@ -45,6 +50,33 @@ public:
 	/** リザルト Widget */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> ResultWidgetClass;
+
+	/** シャッターフラッシュ Widget */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> FlashWidgetClass;
+
+	/** 最終リザルト Widget */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> FinalResultWidgetClass;
+
+	/** テスト用 PiP 表示 Widget（開発中にズームビューを確認するため） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> TestPipWidgetClass;
+
+	// =========================================================================
+	// テスト PiP マテリアル
+	// =========================================================================
+
+	/** TestPip の IMG_ZoomView に設定するズーム表示マテリアル */
+	UPROPERTY(EditAnywhere, Category="HUD|TestPip")
+	UMaterialInterface* ZoomDisplayMaterial = nullptr;
+
+	// =========================================================================
+	// 汚れテクスチャ
+	// =========================================================================
+
+	UPROPERTY(EditAnywhere, Category="HUD|Dirt")
+	UTexture2D* DirtTexture;
 
 	// =========================================================================
 	// 画面サイズ（PlayerPawn から取得）
@@ -184,6 +216,55 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Dirt")
 	TArray<FDirtSplat> CachedDirts;
 
+	// =========================================================================
+	// タイマー／スコア
+	// =========================================================================
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Timer")
+	void UpdateTimer(float RemainingSeconds);
+
+	/** カウントダウン数字を表示する（3 → 2 → 1） */
+	UFUNCTION(BlueprintCallable, Category="HUD|Timer")
+	void ShowCountdown(int32 Seconds);
+
+	/** カウントダウン Widget を非表示にする */
+	UFUNCTION(BlueprintCallable, Category="HUD|Timer")
+	void HideCountdown();
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Score")
+	void UpdateTotalScore(int32 TotalScore);
+
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Score")
+	int32 CurrentTotalScore = 0;
+
+	// =========================================================================
+	// タオル
+	// =========================================================================
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
+	void UpdateTowelStatus(float DurabilityPercent, bool bSwapping);
+
+	// =========================================================================
+	// シャッターフラッシュ
+	// =========================================================================
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Flash")
+	void PlayShutterFlash();
+
+	// =========================================================================
+	// 最終リザルト
+	// =========================================================================
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Result")
+	void ShowFinalResult(int32 InTotalScore, int32 MissionCount);
+
+	// =========================================================================
+	// テストモード（PlayerPawn から BeginPlay で読む）
+	// =========================================================================
+
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
+	bool bTestMode = true;
+
 protected:
 	/** ビューファインダー Widget インスタンス */
 	UPROPERTY()
@@ -208,4 +289,8 @@ protected:
 	/** ミッション結果 Widget インスタンス（ShowMissionResult で生成、HideMissionResult で破棄） */
 	UPROPERTY()
 	UUserWidget* MissionResultWidget;
+
+	/** テスト PiP Widget インスタンス（bTestMode=true のとき BeginPlay で生成） */
+	UPROPERTY()
+	UUserWidget* TestPipWidget;
 };
