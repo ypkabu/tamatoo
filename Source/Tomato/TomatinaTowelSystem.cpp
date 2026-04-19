@@ -59,68 +59,78 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
 
-	// 手が検出されていない
+	// ── 手が検出されていない ─────────────────────────────────────────────────
 	if (!bHandDetected)
 	{
 		bTowelVisible    = false;
 		bTowelInZoomView = false;
-
 		if (HUD) { HUD->HideCursor(); }
-		return;
+	}
+	else
+	{
+		// 手検出中：タオルを表示
+		bTowelVisible = true;
+
+		if (HUD)
+		{
+			const FVector2D ScreenPos(
+				HandScreenPosition.X * HUD->MainWidth,
+				HandScreenPosition.Y * HUD->MainHeight);
+			HUD->UpdateCursorPosition(ScreenPos);
+			HUD->ShowCursor();
+		}
+
+		// タオル交換中
+		if (bIsSwapping)
+		{
+			bTowelInZoomView = false;
+			SwapTimer -= DeltaTime;
+			if (SwapTimer <= 0.f)
+			{
+				bIsSwapping       = false;
+				CurrentDurability = MaxDurability;
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
+			}
+		}
+		else
+		{
+			// 拭き取り処理
+			const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
+			if (bIsWiping)
+			{
+				CurrentDurability -= DurabilityDrainRate * DeltaTime;
+
+				const float Amount = WipeEfficiency * HandSpeed * SpeedMultiplier * DeltaTime;
+				if (ATomatoDirtManager* DirtMgr = GetDirtManager())
+				{
+					DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Amount);
+				}
+
+				if (CurrentDurability <= 0.f)
+				{
+					CurrentDurability = 0.f;
+					bIsSwapping       = true;
+					SwapTimer         = SwapDuration;
+					UE_LOG(LogTemp, Warning,
+						TEXT("ATomatinaTowelSystem: 耐久値切れ → タオル交換開始 (%.1f 秒)"),
+						SwapDuration);
+				}
+			}
+
+			// ズーム映像へのタオル映り込み判定
+			bTowelInZoomView = CheckTowelInView(HandScreenPosition);
+		}
 	}
 
-	// 手検出中：タオルを表示
-	bTowelVisible = true;
-
+	// 毎フレーム HUD にタオル耐久値を通知（手の検出状態に関わらず常に更新）
 	if (HUD)
 	{
-		const FVector2D ScreenPos(
-			HandScreenPosition.X * HUD->MainWidth,
-			HandScreenPosition.Y * HUD->MainHeight);
-		HUD->UpdateCursorPosition(ScreenPos);
-		HUD->ShowCursor();
+		const float Percent = MaxDurability > 0.f
+			? CurrentDurability / MaxDurability
+			: 0.f;
+		HUD->UpdateTowelStatus(Percent, bIsSwapping);
 	}
-
-	// タオル交換中
-	if (bIsSwapping)
-	{
-		bTowelInZoomView = false;
-		SwapTimer -= DeltaTime;
-		if (SwapTimer <= 0.f)
-		{
-			bIsSwapping       = false;
-			CurrentDurability = MaxDurability;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
-		}
-		return;
-	}
-
-	// 拭き取り処理
-	const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
-
-	if (bIsWiping)
-	{
-		CurrentDurability -= DurabilityDrainRate * DeltaTime;
-
-		const float Amount = WipeEfficiency * HandSpeed * SpeedMultiplier * DeltaTime;
-		if (ATomatoDirtManager* DirtMgr = GetDirtManager())
-		{
-			DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Amount);
-		}
-
-		if (CurrentDurability <= 0.f)
-		{
-			CurrentDurability = 0.f;
-			bIsSwapping       = true;
-			SwapTimer         = SwapDuration;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaTowelSystem: 耐久値切れ → タオル交換開始 (%.1f 秒)"), SwapDuration);
-		}
-	}
-
-	// ズーム映像へのタオル映り込み判定
-	bTowelInZoomView = CheckTowelInView(HandScreenPosition);
 }
 
 // =============================================================================

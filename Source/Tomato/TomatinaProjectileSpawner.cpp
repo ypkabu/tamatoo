@@ -7,6 +7,9 @@
 #include "GameFramework/Pawn.h"
 
 #include "TomatinaProjectile.h"
+#include "TomatinaPlayerPawn.h"
+#include "Camera/CameraComponent.h"
+#include "TomatoThrower.h"
 
 // =============================================================================
 // コンストラクタ
@@ -15,9 +18,29 @@
 ATomatinaProjectileSpawner::ATomatinaProjectileSpawner()
 {
 	PrimaryActorTick.bCanEverTick = true;
+}
 
-	// 最初のスポーンはすぐ発生しないよう初期値を基準値で設定
-	SpawnTimer = SpawnInterval;
+// =============================================================================
+// BeginPlay
+// =============================================================================
+
+void ATomatinaProjectileSpawner::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (SpawnMode == ETomatoSpawnMode::ThrowerAnimation)
+	{
+		// Thrower が自分で投げるので Spawner の Tick は不要
+		SetActorTickEnabled(false);
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaProjectileSpawner [%s]: ThrowerAnimation モード → Tick 無効"),
+			*GetName());
+	}
+	else
+	{
+		// IntervalRandom: 最初のスポーンはすぐ発生しないよう基準値で設定
+		SpawnTimer = SpawnInterval;
+	}
 }
 
 // =============================================================================
@@ -64,7 +87,15 @@ void ATomatinaProjectileSpawner::SpawnTomato()
 			TEXT("ATomatinaProjectileSpawner::SpawnTomato: Pawn の取得に失敗"));
 		return;
 	}
-	const FVector CameraLoc = Pawn->GetActorLocation();
+	// カメラコンポーネントの実際の位置を使う（Pawn ルートは床面のためズレる）
+	FVector CameraLoc = Pawn->GetActorLocation();
+	if (ATomatinaPlayerPawn* TomatoPawn = Cast<ATomatinaPlayerPawn>(Pawn))
+	{
+		if (TomatoPawn->PlayerCamera)
+		{
+			CameraLoc = TomatoPawn->PlayerCamera->GetComponentLocation();
+		}
+	}
 
 	// 軌道を確率で決定
 	const float Roll = FMath::FRand();
