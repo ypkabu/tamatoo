@@ -4,7 +4,8 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
-#include "Components/InputComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -23,6 +24,7 @@ ATomatinaPlayerPawn::ATomatinaPlayerPawn()
 	: PC(nullptr)
 {
 	PrimaryActorTick.bCanEverTick = true;
+	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
 	// メインカメラ：ルートコンポーネントにアタッチ
 	PlayerCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("PlayerCamera"));
@@ -41,7 +43,15 @@ ATomatinaPlayerPawn::ATomatinaPlayerPawn()
 
 void ATomatinaPlayerPawn::BeginPlay()
 {
+	UE_LOG(LogTemp, Warning,
+		TEXT("===== ATomatinaPlayerPawn::BeginPlay called ====="));
+
 	Super::BeginPlay();
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("PlayerPawn: Main=(%d,%d) Phone=(%d,%d) bTestMode=%d"),
+		(int)MainWidth, (int)MainHeight,
+		(int)PhoneWidth, (int)PhoneHeight, bTestMode);
 
 	if (GetWorld())
 	{
@@ -51,6 +61,23 @@ void ATomatinaPlayerPawn::BeginPlay()
 	if (!PC)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::BeginPlay: PlayerController の取得に失敗"));
+		return;
+	}
+
+	// Enhanced Input MappingContext を登録
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer());
+	if (Subsystem && DefaultMappingContext)
+	{
+		Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		UE_LOG(LogTemp, Warning, TEXT("PlayerPawn: MappingContext 追加完了"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("PlayerPawn: MappingContext 追加失敗 Subsystem=%s Context=%s"),
+			Subsystem          ? TEXT("OK") : TEXT("NULL"),
+			DefaultMappingContext ? TEXT("OK") : TEXT("NULL"));
 	}
 }
 
@@ -62,15 +89,29 @@ void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInput
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	if (!PlayerInputComponent)
+	UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent);
+	if (!EIC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::SetupPlayerInputComponent: PlayerInputComponent が null"));
+		UE_LOG(LogTemp, Error,
+			TEXT("PlayerPawn: UEnhancedInputComponent のキャスト失敗 "
+			     "（Project Settings > Input で Enhanced Input Plugin が有効か確認）"));
 		return;
 	}
 
-	PlayerInputComponent->BindAction("RightMouseButton", IE_Pressed,  this, &ATomatinaPlayerPawn::OnRightMousePressed);
-	PlayerInputComponent->BindAction("RightMouseButton", IE_Released, this, &ATomatinaPlayerPawn::OnRightMouseReleased);
-	PlayerInputComponent->BindAction("LeftMouseButton",  IE_Pressed,  this, &ATomatinaPlayerPawn::OnLeftMousePressed);
+	if (IA_RightMouse)
+	{
+		EIC->BindAction(IA_RightMouse, ETriggerEvent::Started,   this, &ATomatinaPlayerPawn::OnRightMousePressed);
+		EIC->BindAction(IA_RightMouse, ETriggerEvent::Completed, this, &ATomatinaPlayerPawn::OnRightMouseReleased);
+	}
+	if (IA_LeftMouse)
+	{
+		EIC->BindAction(IA_LeftMouse, ETriggerEvent::Started, this, &ATomatinaPlayerPawn::OnLeftMousePressed);
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("PlayerPawn: Input バインド完了 RightMouse=%s LeftMouse=%s"),
+		IA_RightMouse ? TEXT("OK") : TEXT("NULL"),
+		IA_LeftMouse  ? TEXT("OK") : TEXT("NULL"));
 }
 
 // =============================================================================
@@ -151,19 +192,22 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	}
 
 	// ------------------------------------------------------------------
-	// ズーム完了後：マウス入力でカメラをパン
+	// ズーム中：マウス入力でパン（TargetOffset に累積）
 	// ------------------------------------------------------------------
-	if (bZoomComplete)
+	if (bIsZooming)
 	{
 		const float DeltaX = PC->GetInputAxisValue(TEXT("Turn"));
 		const float DeltaY = PC->GetInputAxisValue(TEXT("LookUp"));
 
-		const FVector Offset(
-			0.f,
-			DeltaX * MoveSpeed * DeltaTime * -1.f,
-			DeltaY * MoveSpeed * DeltaTime);
+		if (FMath::Abs(DeltaX) > 0.001f || FMath::Abs(DeltaY) > 0.001f)
+		{
+			const FVector Offset(
+				0.f,
+				DeltaX * MoveSpeed * DeltaTime * -1.f,
+				DeltaY * MoveSpeed * DeltaTime);
 
-		SceneCapture_Zoom->AddLocalOffset(Offset);
+			TargetOffset += Offset;
+		}
 	}
 
 	// ------------------------------------------------------------------
@@ -180,8 +224,10 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 // 右クリック押下
 // =============================================================================
 
-void ATomatinaPlayerPawn::OnRightMousePressed()
+void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& Value)
 {
+	UE_LOG(LogTemp, Warning, TEXT("PlayerPawn: RightMouse Pressed"));
+
 	if (!PC)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed: PC が null"));
@@ -254,8 +300,9 @@ void ATomatinaPlayerPawn::OnRightMousePressed()
 // 右クリック解放
 // =============================================================================
 
-void ATomatinaPlayerPawn::OnRightMouseReleased()
+void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& Value)
 {
+	UE_LOG(LogTemp, Warning, TEXT("PlayerPawn: RightMouse Released"));
 	bIsZooming      = false;
 	bZoomComplete   = false;
 	bCursorCentered = false;
@@ -287,13 +334,12 @@ void ATomatinaPlayerPawn::OnRightMouseReleased()
 // 左クリック押下
 // =============================================================================
 
-void ATomatinaPlayerPawn::OnLeftMousePressed()
+void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& Value)
 {
-	if (!bIsZooming)
-	{
-		// ズーム中でなければ撮影しない
-		return;
-	}
+	UE_LOG(LogTemp, Warning,
+		TEXT("PlayerPawn: LeftMouse Pressed bIsZooming=%d"), bIsZooming);
+
+	if (!bIsZooming) { return; }
 
 	if (!GetWorld())
 	{
@@ -304,18 +350,13 @@ void ATomatinaPlayerPawn::OnLeftMousePressed()
 	ATomatinaGameMode* GameMode = Cast<ATomatinaGameMode>(
 		UGameplayStatics::GetGameMode(GetWorld()));
 
-	if (!GameMode)
+	if (GameMode)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: ATomatinaGameMode の取得に失敗"));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("PlayerPawn: TakePhoto 呼び出し"));
+		GameMode->TakePhoto(SceneCapture_Zoom);
 	}
-
-	if (!SceneCapture_Zoom)
+	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: SceneCapture_Zoom が null"));
-		return;
+		UE_LOG(LogTemp, Error, TEXT("PlayerPawn: GameMode 取得失敗"));
 	}
-
-	GameMode->TakePhoto(SceneCapture_Zoom);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed: TakePhoto 呼び出し完了"));
 }
