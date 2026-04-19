@@ -51,15 +51,16 @@ public:
 	// =========================================================================
 
 	/**
-	 * 指定アクターが SceneCapture の視野内に入っているかを判定する。
-	 * バウンドボックスの 8 頂点のうち 1 つでも Phone 画面内に投影されれば true。
+	 * CheckLocation が ZoomCamera の視野内に収まり、かつ遮蔽されていなければ true。
+	 * FOV ハーフタン法で NDC 範囲チェック → ラインレースで遮蔽確認。
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Tomatina|Visibility")
 	static bool CheckVisibility(
 		USceneCaptureComponent2D* ZoomCamera,
 		AActor* TargetActor,
-		float PhoneWidth,
-		float PhoneHeight);
+		FVector CheckLocation,
+		float ScreenWidth,
+		float ScreenHeight);
 
 	// =========================================================================
 	// ② CalculatePhotoScore

@@ -66,6 +66,7 @@ public:
 	ATomatinaGameMode();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	// =========================================================================
 	// ミッション
@@ -126,6 +127,24 @@ public:
 	bool bIsShowingResult = false;
 
 	// =========================================================================
+	// タイマー（Tick で毎フレーム更新）
+	// =========================================================================
+
+	/** 現在のミッションの残り時間（秒）。-1 なら無制限 or 終了済 */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Timer")
+	float RemainingTime = -1.f;
+
+	// =========================================================================
+	// カウントダウン（ゲーム開始前 3-2-1）
+	// =========================================================================
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Countdown")
+	bool bInCountdown = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Countdown")
+	float CountdownRemaining = 0.f;
+
+	// =========================================================================
 	// 関数
 	// =========================================================================
 
@@ -152,6 +171,7 @@ protected:
 private:
 	FTimerHandle ResultTimerHandle;
 	FTimerHandle MissionTimerHandle;
+	int32 LastCountdownSecond = -1;
 
 	UPROPERTY()
 	ATomatinaTargetSpawner* TargetSpawner = nullptr;
