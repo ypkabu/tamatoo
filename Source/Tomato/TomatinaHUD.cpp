@@ -9,86 +9,68 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
-#include "TimerManager.h"
+
 #include "TomatinaPlayerPawn.h"
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// コンストラクタ
+// =============================================================================
 ATomatinaHUD::ATomatinaHUD()
-	: ViewFinderWidget(nullptr)
-	, CursorWidget(nullptr)
-	, DirtOverlayWidget(nullptr)
-	, ResultWidget(nullptr)
-	, MissionWidget(nullptr)
-	, MissionResultWidget(nullptr)
-	, TestPipWidget(nullptr)
 {
+	PrimaryActorTick.bCanEverTick = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// BeginPlay — 永続 Widget を生成
+// =============================================================================
 void ATomatinaHUD::BeginPlay()
 {
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 開始"));
 	Super::BeginPlay();
 
-	// ── PlayerPawn から画面サイズを取得 ──────────────────────────────────
-	if (APlayerController* PC = GetOwningPlayerController())
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC)
 	{
-		if (ATomatinaPlayerPawn* Pawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn()))
-		{
-			MainWidth   = Pawn->MainWidth;
-			MainHeight  = Pawn->MainHeight;
-			PhoneWidth  = Pawn->PhoneWidth;
-			PhoneHeight = Pawn->PhoneHeight;
-			bTestMode   = Pawn->bTestMode;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD::BeginPlay: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
-				MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay: ATomatinaPlayerPawn へのキャストに失敗（デフォルト値を使用）"));
-		}
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: PlayerController 取得失敗"));
+		return;
+	}
+
+	// ── PlayerPawn から 4 サイズと bTestMode を取得 ──
+	if (ATomatinaPlayerPawn* Pawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn()))
+	{
+		MainWidth   = Pawn->MainWidth;
+		MainHeight  = Pawn->MainHeight;
+		PhoneWidth  = Pawn->PhoneWidth;
+		PhoneHeight = Pawn->PhoneHeight;
+		bTestMode   = Pawn->bTestMode;
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
+			MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay: PlayerController の取得に失敗"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: PlayerPawn 取得失敗（デフォルト値使用）"));
 	}
 
-	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) { return; }
-
-	// ── ViewFinder Widget ────────────────────────────────────────────────
+	// ── ViewFinder ─────────────────────────────
 	if (ViewFinderWidgetClass)
 	{
 		ViewFinderWidget = CreateWidget<UUserWidget>(PC, ViewFinderWidgetClass);
-		if (ViewFinderWidget)
-		{
-			ViewFinderWidget->AddToViewport(100);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ViewFinderWidget を生成しました"));
-		}
+		if (ViewFinderWidget) { ViewFinderWidget->AddToViewport(100); }
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ViewFinderWidgetClass が未設定"));
-	}
+	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: ViewFinderWidgetClass 未設定")); }
 
-	// ── DirtOverlay Widget ───────────────────────────────────────────────
+	// ── DirtOverlay ─────────────────────────────
 	if (DirtOverlayWidgetClass)
 	{
 		DirtOverlayWidget = CreateWidget<UUserWidget>(PC, DirtOverlayWidgetClass);
-		if (DirtOverlayWidget)
-		{
-			DirtOverlayWidget->AddToViewport(150);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: DirtOverlayWidget を生成しました"));
-		}
+		if (DirtOverlayWidget) { DirtOverlayWidget->AddToViewport(150); }
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: DirtOverlayWidgetClass が未設定"));
-	}
+	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: DirtOverlayWidgetClass 未設定")); }
 
-	// ── Cursor Widget ────────────────────────────────────────────────────
+	// ── Cursor ─────────────────────────────
 	if (CursorWidgetClass)
 	{
 		CursorWidget = CreateWidget<UUserWidget>(PC, CursorWidgetClass);
@@ -96,63 +78,81 @@ void ATomatinaHUD::BeginPlay()
 		{
 			CursorWidget->AddToViewport(200);
 			CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: CursorWidget を生成しました"));
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: CursorWidgetClass が未設定"));
-	}
+	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: CursorWidgetClass 未設定")); }
 
-	// ── TestPip Widget （bTestMode のときのみ）────────────────────────────
+	// ── MissionDisplay（HUD 常時表示：お題・タイマー・スコア） ──
+	if (MissionDisplayWidgetClass)
+	{
+		MissionDisplayWidget = CreateWidget<UUserWidget>(PC, MissionDisplayWidgetClass);
+		if (MissionDisplayWidget)
+		{
+			MissionDisplayWidget->AddToViewport(250);
+			MissionDisplayWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: MissionDisplayWidgetClass 未設定")); }
+
+	// ── TestPip（開発用） ─────────────────────────────
 	if (bTestMode && TestPipWidgetClass)
 	{
 		TestPipWidget = CreateWidget<UUserWidget>(PC, TestPipWidgetClass);
 		if (TestPipWidget)
 		{
-			TestPipWidget->AddToViewport(100);
+			TestPipWidget->AddToViewport(110);
 			TestPipWidget->SetVisibility(ESlateVisibility::Visible);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: TestPipWidget 生成成功"));
 
-			UImage* ZoomImg = Cast<UImage>(
-				TestPipWidget->GetWidgetFromName(TEXT("IMG_ZoomView")));
-			if (ZoomImg && ZoomDisplayMaterial)
+			UImage* Img = Cast<UImage>(TestPipWidget->GetWidgetFromName(TEXT("IMG_ZoomView")));
+			if (Img && ZoomDisplayMaterial)
 			{
-				ZoomImg->SetBrushFromMaterial(ZoomDisplayMaterial);
-				UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: TestPip ZoomMaterial 設定完了"));
+				Img->SetBrushFromMaterial(ZoomDisplayMaterial);
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error,
-					TEXT("ATomatinaHUD: TestPip IMG_ZoomView=%s Material=%s"),
-					ZoomImg            ? TEXT("OK") : TEXT("NULL"),
+				UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: TestPip IMG_ZoomView=%s Material=%s"),
+					Img ? TEXT("OK") : TEXT("NULL"),
 					ZoomDisplayMaterial ? TEXT("OK") : TEXT("NULL"));
 			}
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error,
-			TEXT("ATomatinaHUD: TestPip 生成失敗 bTestMode=%d Class=%s"),
-			bTestMode,
-			TestPipWidgetClass ? TEXT("OK") : TEXT("NULL"));
-	}
 
-	// ResultWidget は ShowResult() で動的生成するため BeginPlay では作らない
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 完了"));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// Tick — シャッターフラッシュの実時間制御
+// =============================================================================
+void ATomatinaHUD::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (bFlashActive && ShutterFlashWidget)
+	{
+		FlashElapsed += FApp::GetDeltaTime();
+		if (FlashElapsed >= 0.1f)
+		{
+			ShutterFlashWidget->RemoveFromParent();
+			ShutterFlashWidget = nullptr;
+			bFlashActive = false;
+			FlashElapsed = 0.f;
+		}
+	}
+}
+
+// =============================================================================
+// UpdateCursorPosition（例外1）
+// IMG_Crosshair の CanvasPanelSlot をメイン座標 → iPhone 座標にマップ
+// =============================================================================
 void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 {
-	CurrentCursorPosition = Pos;
-
-	if (!CursorWidget) return;
+	if (!CursorWidget) { return; }
 
 	UImage* Crosshair = Cast<UImage>(CursorWidget->GetWidgetFromName(TEXT("IMG_Crosshair")));
-	if (!Crosshair) return;
+	if (!Crosshair) { return; }
 
 	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Crosshair->Slot);
-	if (!Slot) return;
+	if (!Slot) { return; }
 
 	const float NormX  = (MainWidth  > 0.f) ? Pos.X / MainWidth  : 0.f;
 	const float NormY  = (MainHeight > 0.f) ? Pos.Y / MainHeight : 0.f;
@@ -161,400 +161,348 @@ void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 	Slot->SetPosition(FVector2D(PhoneX, PhoneY));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// ShowCursor / HideCursor
+// =============================================================================
 void ATomatinaHUD::ShowCursor()
 {
-	if (!CursorWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor: CursorWidget が null"));
-		return;
-	}
-	CursorWidget->SetVisibility(ESlateVisibility::Visible);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor: カーソル表示"));
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor"));
+	if (CursorWidget) { CursorWidget->SetVisibility(ESlateVisibility::Visible); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideCursor()
 {
-	if (!CursorWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor: CursorWidget が null"));
-		return;
-	}
-	CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor: カーソル非表示"));
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor"));
+	if (CursorWidget) { CursorWidget->SetVisibility(ESlateVisibility::Hidden); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// ShowResult — 撮影後の結果（WBP_PhotoResult）
+// =============================================================================
 void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment)
 {
-	LastScore   = Score;
-	LastComment = Comment;
-
-	if (!ResultWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: ResultWidgetClass が未設定"));
-		return;
-	}
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult Score=%d"), Score);
 
 	APlayerController* PC = GetOwningPlayerController();
-	if (!PC)
+	if (!PC || !PhotoResultWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: PlayerController が null"));
+		UE_LOG(LogTemp, Error, TEXT("ShowResult: PC=%s Class=%s"),
+			PC ? TEXT("OK") : TEXT("NULL"),
+			PhotoResultWidgetClass ? TEXT("OK") : TEXT("NULL"));
 		return;
 	}
 
-	// 既存リザルトが残っていれば先に破棄
-	if (ResultWidget)
+	if (PhotoResultWidget)
 	{
-		ResultWidget->RemoveFromParent();
-		ResultWidget = nullptr;
+		PhotoResultWidget->RemoveFromParent();
+		PhotoResultWidget = nullptr;
 	}
 
-	ResultWidget = CreateWidget<UUserWidget>(PC, ResultWidgetClass);
-	if (!ResultWidget)
+	PhotoResultWidget = CreateWidget<UUserWidget>(PC, PhotoResultWidgetClass);
+	if (!PhotoResultWidget) { return; }
+	PhotoResultWidget->AddToViewport(300);
+
+	// TXT_Score
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			PhotoResultWidget->GetWidgetFromName(TEXT("TXT_Score"))))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: ResultWidget の生成に失敗"));
-		return;
+		TxtScore->SetText(FText::FromString(FString::Printf(TEXT("%d 点"), Score)));
 	}
 
-	// 位置・サイズをメイン画面全体に合わせる
-	ResultWidget->SetPositionInViewport(FVector2D::ZeroVector, /*bRemoveDPIScale=*/false);
-	ResultWidget->SetDesiredSizeInViewport(FVector2D(MainWidth, MainHeight));
+	// TXT_Comment
+	if (UTextBlock* TxtComment = Cast<UTextBlock>(
+			PhotoResultWidget->GetWidgetFromName(TEXT("TXT_Comment"))))
+	{
+		TxtComment->SetText(FText::FromString(Comment));
+	}
 
-	ResultWidget->AddToViewport(300);
-
-	// Score / Comment の反映は UMG の Binding（LastScore / LastComment）で行う。
-	// IMG_Photo への M_PhotoDisplay セット、TXT_Score / TXT_Comment の更新は
-	// Widget Blueprint の Event Construct / Binding で実装すること。
-
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: Score=%d Comment=%s"), Score, *Comment);
+	// IMG_Photo（M_PhotoDisplay をマテリアルとしてセット）
+	if (UImage* ImgPhoto = Cast<UImage>(
+			PhotoResultWidget->GetWidgetFromName(TEXT("IMG_Photo"))))
+	{
+		if (PhotoDisplayMaterial) { ImgPhoto->SetBrushFromMaterial(PhotoDisplayMaterial); }
+	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideResult()
 {
-	if (!ResultWidget)
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideResult"));
+	if (PhotoResultWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideResult: ResultWidget が null"));
-		return;
-	}
-	ResultWidget->RemoveFromParent();
-	ResultWidget = nullptr;
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideResult: リザルト破棄"));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
-{
-	CachedDirts = Dirts;
-
-	if (!DirtOverlayWidget)
-	{
-		UE_LOG(LogTemp, Error, TEXT("UpdateDirtDisplay: DirtOverlayWidget NULL"));
-		return;
-	}
-
-	UCanvasPanel* SplatContainer = Cast<UCanvasPanel>(
-		DirtOverlayWidget->GetWidgetFromName(TEXT("SplatContainer")));
-	if (!SplatContainer)
-	{
-		UE_LOG(LogTemp, Error, TEXT("UpdateDirtDisplay: SplatContainer NULL"));
-		return;
-	}
-
-	SplatContainer->ClearChildren();
-
-	int32 ActiveCount = 0;
-	for (const FDirtSplat& Dirt : Dirts)
-	{
-		if (!Dirt.bActive) { continue; }
-		++ActiveCount;
-
-		// ── メイン画面側 ──────────────────────────────────────────────────
-		UImage* MainImg = NewObject<UImage>(DirtOverlayWidget);
-		if (DirtTexture)
-		{
-			MainImg->SetBrushFromTexture(DirtTexture);
-		}
-		else
-		{
-			FSlateBrush Brush;
-			Brush.TintColor = FSlateColor(FLinearColor::Red);
-			Brush.DrawAs   = ESlateBrushDrawType::Image;
-			MainImg->SetBrush(Brush);
-		}
-		MainImg->SetRenderOpacity(Dirt.Opacity);
-
-		UCanvasPanelSlot* MainSlot = SplatContainer->AddChildToCanvas(MainImg);
-		if (MainSlot)
-		{
-			const float MainSize = Dirt.Size * MainWidth;
-			MainSlot->SetPosition(FVector2D(
-				Dirt.NormalizedPosition.X * MainWidth  - MainSize * 0.5f,
-				Dirt.NormalizedPosition.Y * MainHeight - MainSize * 0.5f));
-			MainSlot->SetSize(FVector2D(MainSize, MainSize));
-		}
-
-		// ── iPhone 画面側 ──────────────────────────────────────────────────
-		UImage* PhoneImg = NewObject<UImage>(DirtOverlayWidget);
-		if (DirtTexture)
-		{
-			PhoneImg->SetBrushFromTexture(DirtTexture);
-		}
-		else
-		{
-			FSlateBrush Brush;
-			Brush.TintColor = FSlateColor(FLinearColor::Red);
-			Brush.DrawAs   = ESlateBrushDrawType::Image;
-			PhoneImg->SetBrush(Brush);
-		}
-		PhoneImg->SetRenderOpacity(Dirt.Opacity);
-
-		UCanvasPanelSlot* PhoneSlot = SplatContainer->AddChildToCanvas(PhoneImg);
-		if (PhoneSlot)
-		{
-			const float PhoneSize = Dirt.Size * PhoneWidth;
-			PhoneSlot->SetPosition(FVector2D(
-				MainWidth + Dirt.NormalizedPosition.X * PhoneWidth  - PhoneSize * 0.5f,
-				Dirt.NormalizedPosition.Y * PhoneHeight             - PhoneSize * 0.5f));
-			PhoneSlot->SetSize(FVector2D(PhoneSize, PhoneSize));
-		}
-	}
-
-	if (ActiveCount > 0)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("UpdateDirtDisplay: %d 個の汚れを描画"), ActiveCount);
+		PhotoResultWidget->RemoveFromParent();
+		PhotoResultWidget = nullptr;
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage)
-{
-	CurrentMissionText = MissionText;
-
-	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) { return; }
-
-	if (!MissionWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD::ShowMissionDisplay: MissionWidgetClass が未設定"));
-		return;
-	}
-
-	// Widget がなければ生成
-	if (!MissionWidget)
-	{
-		MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
-		if (!MissionWidget)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD::ShowMissionDisplay: Widget 生成に失敗"));
-			return;
-		}
-
-		MissionWidget->AddToViewport(250);
-	}
-
-	MissionWidget->SetVisibility(ESlateVisibility::Visible);
-
-	// TXT_Mission にお題テキストをセット
-	UTextBlock* TxtMission = Cast<UTextBlock>(
-		MissionWidget->GetWidgetFromName(TEXT("TXT_Mission")));
-	if (TxtMission)
-	{
-		TxtMission->SetText(MissionText);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: TXT_Mission 更新 '%s'"), *MissionText.ToString());
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: TXT_Mission が見つかりません"));
-	}
-
-	// IMG_TargetPreview にプレビュー画像をセット
-	if (TargetImage)
-	{
-		UImage* PreviewImg = Cast<UImage>(
-			MissionWidget->GetWidgetFromName(TEXT("IMG_TargetPreview")));
-		if (PreviewImg)
-		{
-			PreviewImg->SetBrushFromTexture(TargetImage);
-		}
-	}
-
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaHUD::ShowMissionDisplay: '%s' Image=%s"),
-		*MissionText.ToString(),
-		TargetImage ? *TargetImage->GetName() : TEXT("none"));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::ShowMissionText(const FText& Text)
-{
-	ShowMissionDisplay(Text, nullptr);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::HideMissionText()
-{
-	if (MissionWidget)
-	{
-		MissionWidget->SetVisibility(ESlateVisibility::Hidden);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionText: 非表示"));
-	}
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// ShowMissionResult — 時間切れ表示（WBP_MissionResult）
+// =============================================================================
 void ATomatinaHUD::ShowMissionResult(int32 Score, const FString& Comment)
 {
-	MissionResultScore   = Score;
-	MissionResultComment = Comment;
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowMissionResult Score=%d"), Score);
 
 	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) { return; }
-
-	if (!MissionResultWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD::ShowMissionResult: MissionResultWidgetClass が未設定"));
-		return;
-	}
-
-	// 既存インスタンスがあれば再利用
-	if (!MissionResultWidget)
-	{
-		MissionResultWidget = CreateWidget<UUserWidget>(PC, MissionResultWidgetClass);
-		if (MissionResultWidget) { MissionResultWidget->AddToViewport(275); }
-	}
+	if (!PC || !MissionResultWidgetClass) { return; }
 
 	if (MissionResultWidget)
 	{
-		MissionResultWidget->SetVisibility(ESlateVisibility::Visible);
-		UE_LOG(LogTemp, Log,
-			TEXT("ATomatinaHUD::ShowMissionResult: Score=%d Comment=%s"), Score, *Comment);
+		MissionResultWidget->RemoveFromParent();
+		MissionResultWidget = nullptr;
+	}
+
+	MissionResultWidget = CreateWidget<UUserWidget>(PC, MissionResultWidgetClass);
+	if (!MissionResultWidget) { return; }
+	MissionResultWidget->AddToViewport(275);
+
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			MissionResultWidget->GetWidgetFromName(TEXT("TXT_Score"))))
+	{
+		TxtScore->SetText(FText::FromString(FString::Printf(TEXT("%d 点"), Score)));
+	}
+	if (UTextBlock* TxtComment = Cast<UTextBlock>(
+			MissionResultWidget->GetWidgetFromName(TEXT("TXT_Comment"))))
+	{
+		TxtComment->SetText(FText::FromString(Comment));
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideMissionResult()
 {
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideMissionResult"));
 	if (MissionResultWidget)
 	{
-		MissionResultWidget->SetVisibility(ESlateVisibility::Hidden);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionResult: 非表示"));
+		MissionResultWidget->RemoveFromParent();
+		MissionResultWidget = nullptr;
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::PlayShutterFlash()
+// =============================================================================
+// ShowFinalResult — 全ミッション終了（WBP_FinalResult）
+// =============================================================================
+void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
 {
-	if (!FlashWidgetClass) return;
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowFinalResult Total=%d Missions=%d"),
+		InTotalScore, MissionCount);
+
 	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) return;
+	if (!PC || !FinalResultWidgetClass) { return; }
 
-	UUserWidget* Flash = CreateWidget<UUserWidget>(PC, FlashWidgetClass);
-	if (!Flash) return;
+	if (FinalResultWidget)
+	{
+		FinalResultWidget->RemoveFromParent();
+		FinalResultWidget = nullptr;
+	}
 
-	Flash->AddToViewport(999);
+	FinalResultWidget = CreateWidget<UUserWidget>(PC, FinalResultWidgetClass);
+	if (!FinalResultWidget) { return; }
+	FinalResultWidget->AddToViewport(500);
 
-	FTimerHandle Handle;
-	GetWorldTimerManager().SetTimer(Handle,
-		FTimerDelegate::CreateLambda([Flash]()
-		{
-			if (IsValid(Flash)) { Flash->RemoveFromParent(); }
-		}),
-		0.1f, false);
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_FinalScore"))))
+	{
+		TxtScore->SetText(FText::AsNumber(InTotalScore));
+	}
+
+	// Rank 判定（平均点基準）
+	const float Avg = (MissionCount > 0) ? static_cast<float>(InTotalScore) / MissionCount : 0.f;
+	FString Rank;
+	if      (Avg >= 80.f) { Rank = TEXT("S"); }
+	else if (Avg >= 60.f) { Rank = TEXT("A"); }
+	else if (Avg >= 40.f) { Rank = TEXT("B"); }
+	else                  { Rank = TEXT("C"); }
+
+	if (UTextBlock* TxtRank = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_Rank"))))
+	{
+		TxtRank->SetText(FText::FromString(Rank));
+	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// ShowMissionDisplay — お題テキスト・プレビュー画像
+// =============================================================================
+void ATomatinaHUD::ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage)
+{
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowMissionDisplay '%s'"),
+		*MissionText.ToString());
+
+	if (!MissionDisplayWidget) { return; }
+	MissionDisplayWidget->SetVisibility(ESlateVisibility::Visible);
+
+	if (UTextBlock* TxtMission = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_Mission"))))
+	{
+		TxtMission->SetText(MissionText);
+	}
+
+	if (TargetImage)
+	{
+		if (UImage* Preview = Cast<UImage>(
+				MissionDisplayWidget->GetWidgetFromName(TEXT("IMG_TargetPreview"))))
+		{
+			Preview->SetBrushFromTexture(TargetImage);
+		}
+	}
+}
+
+void ATomatinaHUD::HideMissionDisplay()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideMissionDisplay"));
+	if (MissionDisplayWidget)
+	{
+		MissionDisplayWidget->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+// =============================================================================
+// UpdateTimer — MissionDisplay の TXT_Timer を更新
+// =============================================================================
 void ATomatinaHUD::UpdateTimer(float RemainingSeconds)
 {
-	if (!MissionWidget) return;
-	UTextBlock* Txt = Cast<UTextBlock>(MissionWidget->GetWidgetFromName(TEXT("TXT_Timer")));
-	if (Txt)
+	if (!MissionDisplayWidget) { return; }
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_Timer"))))
 	{
-		FString Str = FString::Printf(TEXT("残り %.1f 秒"), RemainingSeconds);
-		Txt->SetText(FText::FromString(Str));
+		Txt->SetText(FText::FromString(
+			FString::Printf(TEXT("残り %.1f 秒"), RemainingSeconds)));
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// UpdateTotalScore — MissionDisplay の TXT_TotalScore を更新
+// =============================================================================
+void ATomatinaHUD::UpdateTotalScore(int32 InTotalScore)
+{
+	if (!MissionDisplayWidget) { return; }
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_TotalScore"))))
+	{
+		Txt->SetText(FText::FromString(
+			FString::Printf(TEXT("Score: %d"), InTotalScore)));
+	}
+}
+
+// =============================================================================
+// ShowCountdown / HideCountdown — WBP_CountdownDisplay
+// =============================================================================
 void ATomatinaHUD::ShowCountdown(int32 Seconds)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCountdown: %d"), Seconds);
-	if (!MissionWidget) return;
-	UTextBlock* Txt = Cast<UTextBlock>(MissionWidget->GetWidgetFromName(TEXT("TXT_Timer")));
-	if (Txt)
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCountdown %d"), Seconds);
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !CountdownWidgetClass) { return; }
+
+	if (!CountdownWidget)
+	{
+		CountdownWidget = CreateWidget<UUserWidget>(PC, CountdownWidgetClass);
+		if (CountdownWidget) { CountdownWidget->AddToViewport(400); }
+	}
+	if (!CountdownWidget) { return; }
+
+	CountdownWidget->SetVisibility(ESlateVisibility::Visible);
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			CountdownWidget->GetWidgetFromName(TEXT("TXT_Countdown"))))
 	{
 		Txt->SetText(FText::AsNumber(Seconds));
-		MissionWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideCountdown()
 {
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCountdown"));
-	if (MissionWidget)
+	if (CountdownWidget)
 	{
-		UTextBlock* Txt = Cast<UTextBlock>(MissionWidget->GetWidgetFromName(TEXT("TXT_Timer")));
-		if (Txt) { Txt->SetText(FText::GetEmpty()); }
+		CountdownWidget->RemoveFromParent();
+		CountdownWidget = nullptr;
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::UpdateTotalScore(int32 InTotalScore)
+// =============================================================================
+// PlayShutterFlash — WBP_ShutterFlash を 0.1 秒だけ表示
+// =============================================================================
+void ATomatinaHUD::PlayShutterFlash()
 {
-	CurrentTotalScore = InTotalScore;
-	if (!MissionWidget) return;
-	UTextBlock* Txt = Cast<UTextBlock>(MissionWidget->GetWidgetFromName(TEXT("TXT_TotalScore")));
-	if (Txt)
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::PlayShutterFlash"));
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !ShutterFlashWidgetClass) { return; }
+
+	if (ShutterFlashWidget)
 	{
-		FString Str = FString::Printf(TEXT("Score: %d"), CurrentTotalScore);
-		Txt->SetText(FText::FromString(Str));
+		ShutterFlashWidget->RemoveFromParent();
+		ShutterFlashWidget = nullptr;
+	}
+
+	ShutterFlashWidget = CreateWidget<UUserWidget>(PC, ShutterFlashWidgetClass);
+	if (!ShutterFlashWidget) { return; }
+	ShutterFlashWidget->AddToViewport(999);
+
+	bFlashActive = true;
+	FlashElapsed = 0.f;
+}
+
+// =============================================================================
+// UpdateDirtDisplay（例外2）
+// SplatContainer 内に汚れ UImage を動的生成。メイン側・iPhone 側に重複配置。
+// =============================================================================
+void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
+{
+	if (!DirtOverlayWidget) { return; }
+
+	UCanvasPanel* Container = Cast<UCanvasPanel>(
+		DirtOverlayWidget->GetWidgetFromName(TEXT("SplatContainer")));
+	if (!Container) { return; }
+
+	Container->ClearChildren();
+
+	for (const FDirtSplat& Dirt : Dirts)
+	{
+		if (!Dirt.bActive) { continue; }
+
+		// ── メイン画面側 ─────────────
+		UImage* MainImg = NewObject<UImage>(DirtOverlayWidget);
+		if (DirtTexture) { MainImg->SetBrushFromTexture(DirtTexture); }
+		MainImg->SetRenderOpacity(Dirt.Opacity);
+		if (UCanvasPanelSlot* Slot = Container->AddChildToCanvas(MainImg))
+		{
+			const float Size = Dirt.Size * MainWidth;
+			Slot->SetPosition(FVector2D(
+				Dirt.NormalizedPosition.X * MainWidth  - Size * 0.5f,
+				Dirt.NormalizedPosition.Y * MainHeight - Size * 0.5f));
+			Slot->SetSize(FVector2D(Size, Size));
+		}
+
+		// ── iPhone 画面側 ─────────────
+		UImage* PhoneImg = NewObject<UImage>(DirtOverlayWidget);
+		if (DirtTexture) { PhoneImg->SetBrushFromTexture(DirtTexture); }
+		PhoneImg->SetRenderOpacity(Dirt.Opacity);
+		if (UCanvasPanelSlot* Slot = Container->AddChildToCanvas(PhoneImg))
+		{
+			const float Size = Dirt.Size * PhoneWidth;
+			Slot->SetPosition(FVector2D(
+				MainWidth + Dirt.NormalizedPosition.X * PhoneWidth  - Size * 0.5f,
+				Dirt.NormalizedPosition.Y * PhoneHeight              - Size * 0.5f));
+			Slot->SetSize(FVector2D(Size, Size));
+		}
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// UpdateTowelStatus — DirtOverlay 内の PB_TowelStamina / TXT_SwapMessage を更新
+// =============================================================================
 void ATomatinaHUD::UpdateTowelStatus(float DurabilityPercent, bool bSwapping)
 {
-	if (!DirtOverlayWidget) return;
+	if (!DirtOverlayWidget) { return; }
 
-	UProgressBar* PbTowel = Cast<UProgressBar>(
-		DirtOverlayWidget->GetWidgetFromName(TEXT("PB_TowelStamina")));
-	if (PbTowel) { PbTowel->SetPercent(DurabilityPercent); }
-
-	UTextBlock* TxtSwap = Cast<UTextBlock>(
-		DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_SwapMessage")));
-	if (TxtSwap)
+	if (UProgressBar* Bar = Cast<UProgressBar>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("PB_TowelStamina"))))
 	{
-		TxtSwap->SetVisibility(bSwapping ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		Bar->SetPercent(DurabilityPercent);
 	}
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
-{
-	if (!FinalResultWidgetClass) return;
-	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) return;
-
-	UUserWidget* FinalWidget = CreateWidget<UUserWidget>(PC, FinalResultWidgetClass);
-	if (!FinalWidget) return;
-
-	FinalWidget->AddToViewport(500);
-
-	UTextBlock* TxtScore = Cast<UTextBlock>(
-		FinalWidget->GetWidgetFromName(TEXT("TXT_FinalScore")));
-	if (TxtScore) { TxtScore->SetText(FText::AsNumber(InTotalScore)); }
-
-	UTextBlock* TxtMissions = Cast<UTextBlock>(
-		FinalWidget->GetWidgetFromName(TEXT("TXT_MissionCount")));
-	if (TxtMissions) { TxtMissions->SetText(FText::AsNumber(MissionCount)); }
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD::ShowFinalResult: Score=%d Missions=%d"), InTotalScore, MissionCount);
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_SwapMessage"))))
+	{
+		Txt->SetVisibility(bSwapping ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
 }

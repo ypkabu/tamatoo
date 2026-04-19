@@ -9,14 +9,13 @@
 
 class UCameraComponent;
 class USceneCaptureComponent2D;
-class ATomatinaHUD;
 class APlayerController;
 class UInputMappingContext;
 class UInputAction;
 
 /**
- * プレイヤーが操作するポーン。
- * メインカメラと SceneCapture によるズーム撮影機能を持つ。
+ * カメラマン 1P のポーン。
+ * PlayerCamera（メインモニター用）と SceneCapture_Zoom（RT_Zoom 出力）を持つ。
  */
 UCLASS()
 class TOMATO_API ATomatinaPlayerPawn : public ADefaultPawn
@@ -30,22 +29,19 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	// -------------------------------------------------------------------------
+	// ──────────────────────────────────────────────
 	// コンポーネント
-	// -------------------------------------------------------------------------
-
-	/** メインモニター用カメラ（固定） */
+	// ──────────────────────────────────────────────
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
 	UCameraComponent* PlayerCamera;
 
-	/** ズーム用 SceneCapture（PlayerCamera の子） */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Camera")
 	USceneCaptureComponent2D* SceneCapture_Zoom;
 
-	// -------------------------------------------------------------------------
-	// 画面サイズ
-	// -------------------------------------------------------------------------
-
+	// ──────────────────────────────────────────────
+	// 画面サイズ（BP で一元設定する 4 変数）
+	// GameMode / HUD は BeginPlay で Pawn から取得
+	// ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
 	float MainWidth = 2560.f;
 
@@ -58,83 +54,67 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
 	float PhoneHeight = 768.f;
 
-	// -------------------------------------------------------------------------
-	// ズーム状態
-	// -------------------------------------------------------------------------
-
-	UPROPERTY(BlueprintReadWrite, Category="Zoom")
-	bool bIsZooming = false;
-
-	UPROPERTY(BlueprintReadWrite, Category="Zoom")
-	bool bZoomComplete = false;
-
-	UPROPERTY(BlueprintReadWrite, Category="Zoom")
-	bool bCursorCentered = false;
-
-	/** ズームなし時の FOV */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
-	float DefaultFOV = 90.f;
-
-	/** ズーム時の FOV */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
-	float ZoomFOV = 30.f;
-
-	/** ZoomAlpha の補間速度（1/0.3 ≈ 3.3 で 0.3 秒到達） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
-	float ZoomSpeed = 3.3f;
-
-	/** ズーム進行度（0 = 未ズーム、1 = フルズーム） */
-	UPROPERTY(BlueprintReadWrite, Category="Zoom")
-	float ZoomAlpha = 0.f;
-
-	/** ズーム完了後のマウスルック速度 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
-	float MoveSpeed = 500.f;
-
-	/** クリック地点を中心に持ってくるための SceneCapture ローカルオフセット */
-	UPROPERTY(BlueprintReadWrite, Category="Zoom")
-	FVector TargetOffset = FVector::ZeroVector;
-
-	// -------------------------------------------------------------------------
-	// Enhanced Input
-	// -------------------------------------------------------------------------
-
-	/** デフォルト Input Mapping Context（BP_TomatinaPlayerPawn の Detail で設定） */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputMappingContext* DefaultMappingContext = nullptr;
-
-	/** 右クリック Input Action（IA_RightMouse） */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputAction* IA_RightMouse = nullptr;
-
-	/** 左クリック Input Action（IA_LeftMouse） */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputAction* IA_LeftMouse = nullptr;
-
-	// -------------------------------------------------------------------------
-	// テストモード
-	// -------------------------------------------------------------------------
-
-	/** true: PiP プレビューをメインモニターに表示する（開発用） */
+	// ──────────────────────────────────────────────
+	// テストモード（iPhone なしで PiP 動作確認）
+	// ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
 	bool bTestMode = true;
 
+	// ──────────────────────────────────────────────
+	// ズーム状態
+	// ──────────────────────────────────────────────
+	UPROPERTY(BlueprintReadOnly, Category="Zoom")
+	bool bIsZooming = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="Zoom")
+	bool bZoomComplete = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="Zoom")
+	bool bCursorCentered = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="Zoom")
+	float ZoomAlpha = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float DefaultFOV = 90.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomFOV = 30.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomSpeed = 5.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float MoveSpeed = 500.f;
+
+	UPROPERTY(BlueprintReadOnly, Category="Zoom")
+	FVector TargetOffset = FVector::ZeroVector;
+
+	// ──────────────────────────────────────────────
+	// Enhanced Input
+	// ──────────────────────────────────────────────
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputMappingContext* DefaultMappingContext = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputAction* IA_RightMouse = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputAction* IA_LeftMouse = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputAction* IA_Look = nullptr;
+
 protected:
-	// -------------------------------------------------------------------------
-	// 入力ハンドラ
-	// -------------------------------------------------------------------------
-
-	/** 右クリック押下：ズーム開始 */
 	void OnRightMousePressed(const FInputActionValue& Value);
-
-	/** 右クリック解放：ズーム解除 */
 	void OnRightMouseReleased(const FInputActionValue& Value);
-
-	/** 左クリック押下：撮影 */
 	void OnLeftMousePressed(const FInputActionValue& Value);
+	void OnLook(const FInputActionValue& Value);
 
 private:
-	/** キャッシュ済みプレイヤーコントローラー */
 	UPROPERTY()
-	APlayerController* PC;
+	APlayerController* PC = nullptr;
+
+	// Tick で消費されるマウス入力（Triggered で蓄積）
+	FVector2D CurrentLookInput = FVector2D::ZeroVector;
 };
