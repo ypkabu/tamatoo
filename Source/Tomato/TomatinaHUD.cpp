@@ -3,28 +3,66 @@
 #include "TomatinaHUD.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "Materials/MaterialInterface.h"
 #include "GameFramework/PlayerController.h"
-#include "TomatinaPlayerPawn.h"
+#include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
-// ─────────────────────────────────────────────────────────────────────────────
+#include "TomatinaPlayerPawn.h"
+#include "TomatoDirtManager.h"
+
+// =============================================================================
+// コンストラクタ
+// =============================================================================
+
 ATomatinaHUD::ATomatinaHUD()
-	: ViewFinderWidget(nullptr)
+	: DirtTexture(nullptr)
+	, ViewFinderWidget(nullptr)
 	, CursorWidget(nullptr)
 	, DirtOverlayWidget(nullptr)
 	, ResultWidget(nullptr)
 	, MissionWidget(nullptr)
 	, MissionResultWidget(nullptr)
+	, FinalResultWidget(nullptr)
+	, FlashWidget(nullptr)
+	, TestPipWidget(nullptr)
+	, CachedDirtManager(nullptr)
 {
+	PrimaryActorTick.bCanEverTick = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// ApplyZoomMaterial
+// =============================================================================
+
+void ATomatinaHUD::ApplyZoomMaterial(UUserWidget* Widget)
+{
+	if (!Widget || !ZoomDisplayMaterial) { return; }
+
+	UImage* Img = Cast<UImage>(Widget->GetWidgetFromName(TEXT("IMG_ZoomView")));
+	if (Img)
+	{
+		Img->SetBrushFromMaterial(ZoomDisplayMaterial);
+	}
+}
+
+// =============================================================================
+// BeginPlay
+// =============================================================================
+
 void ATomatinaHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ── PlayerPawn から画面サイズを取得 ──────────────────────────────────
+	// PlayerPawn から画面サイズ・bTestMode を取得
+	bool bTestMode = true;
 	if (APlayerController* PC = GetOwningPlayerController())
 	{
 		if (ATomatinaPlayerPawn* Pawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn()))
@@ -33,54 +71,37 @@ void ATomatinaHUD::BeginPlay()
 			MainHeight  = Pawn->MainHeight;
 			PhoneWidth  = Pawn->PhoneWidth;
 			PhoneHeight = Pawn->PhoneHeight;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD::BeginPlay: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f)"),
-				MainWidth, MainHeight, PhoneWidth, PhoneHeight);
+			bTestMode   = Pawn->bTestMode;
 		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay: ATomatinaPlayerPawn へのキャストに失敗（デフォルト値を使用）"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay: PlayerController の取得に失敗"));
 	}
 
 	APlayerController* PC = GetOwningPlayerController();
 	if (!PC) { return; }
 
-	// ── ViewFinder Widget ────────────────────────────────────────────────
+	// ── ViewFinder ──────────────────────────────────────────────────────
 	if (ViewFinderWidgetClass)
 	{
 		ViewFinderWidget = CreateWidget<UUserWidget>(PC, ViewFinderWidgetClass);
 		if (ViewFinderWidget)
 		{
 			ViewFinderWidget->AddToViewport(100);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ViewFinderWidget を生成しました"));
+			ViewFinderWidget->SetVisibility(ESlateVisibility::Visible);
+			ApplyZoomMaterial(ViewFinderWidget);
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ViewFinderWidgetClass が未設定"));
-	}
 
-	// ── DirtOverlay Widget ───────────────────────────────────────────────
+	// ── DirtOverlay ─────────────────────────────────────────────────────
 	if (DirtOverlayWidgetClass)
 	{
 		DirtOverlayWidget = CreateWidget<UUserWidget>(PC, DirtOverlayWidgetClass);
 		if (DirtOverlayWidget)
 		{
 			DirtOverlayWidget->AddToViewport(150);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: DirtOverlayWidget を生成しました"));
+			DirtOverlayWidget->SetVisibility(ESlateVisibility::Visible);
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: DirtOverlayWidgetClass が未設定"));
-	}
 
-	// ── Cursor Widget ────────────────────────────────────────────────────
+	// ── Cursor（初期は Hidden） ─────────────────────────────────────────
 	if (CursorWidgetClass)
 	{
 		CursorWidget = CreateWidget<UUserWidget>(PC, CursorWidgetClass);
@@ -88,75 +109,121 @@ void ATomatinaHUD::BeginPlay()
 		{
 			CursorWidget->AddToViewport(200);
 			CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: CursorWidget を生成しました"));
 		}
 	}
-	else
+
+	// ── Mission（常設表示） ─────────────────────────────────────────────
+	if (MissionWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: CursorWidgetClass が未設定"));
+		MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
+		if (MissionWidget)
+		{
+			MissionWidget->AddToViewport(250);
+			MissionWidget->SetVisibility(ESlateVisibility::Visible);
+		}
 	}
 
-	// ResultWidget は ShowResult() で動的生成するため BeginPlay では作らない
+	// ── FinalResult（最終リザルト、初期 Hidden） ────────────────────────
+	if (FinalResultWidgetClass)
+	{
+		FinalResultWidget = CreateWidget<UUserWidget>(PC, FinalResultWidgetClass);
+		if (FinalResultWidget)
+		{
+			FinalResultWidget->AddToViewport(350);
+			FinalResultWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+
+	// ── TestPip（bTestMode=true のときのみ表示） ────────────────────────
+	if (TestPipWidgetClass)
+	{
+		TestPipWidget = CreateWidget<UUserWidget>(PC, TestPipWidgetClass);
+		if (TestPipWidget)
+		{
+			TestPipWidget->AddToViewport(50);
+			TestPipWidget->SetVisibility(bTestMode
+				? ESlateVisibility::Visible
+				: ESlateVisibility::Hidden);
+			ApplyZoomMaterial(TestPipWidget);
+		}
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD: HUD BeginPlay, Widgets created (bTestMode=%d)"),
+		bTestMode ? 1 : 0);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// Tick
+// =============================================================================
+
+void ATomatinaHUD::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// 汚れ Widget を DirtManager と同期
+	if (ATomatoDirtManager* Mgr = GetDirtManager())
+	{
+		UpdateDirtDisplay(Mgr->GetActiveDirts());
+	}
+}
+
+// =============================================================================
+// カーソル
+// =============================================================================
+
 void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 {
 	CurrentCursorPosition = Pos;
 
-	// CursorWidget 全体をビューポート上の Pos へ移動する。
-	// Widget 内部の Image を動かしたい場合は Blueprint 側で
-	// CurrentCursorPosition を Binding して処理すること。
-	if (CursorWidget)
+	if (!CursorWidget) { return; }
+
+	// CursorWidget は画面全体を覆う Canvas Panel を持ち、
+	// その中の IMG_Crosshair を Pos に移動させる。
+	UImage* Crosshair = Cast<UImage>(
+		CursorWidget->GetWidgetFromName(TEXT("IMG_Crosshair")));
+	if (!Crosshair) { return; }
+
+	if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Crosshair->Slot))
 	{
-		CursorWidget->SetPositionInViewport(Pos, /*bRemoveDPIScale=*/false);
+		Slot->SetPosition(Pos);
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::ShowCursor()
 {
-	if (!CursorWidget)
+	if (CursorWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor: CursorWidget が null"));
-		return;
+		CursorWidget->SetVisibility(ESlateVisibility::Visible);
 	}
-	CursorWidget->SetVisibility(ESlateVisibility::Visible);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor: カーソル表示"));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideCursor()
 {
-	if (!CursorWidget)
+	if (CursorWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor: CursorWidget が null"));
-		return;
+		CursorWidget->SetVisibility(ESlateVisibility::Hidden);
 	}
-	CursorWidget->SetVisibility(ESlateVisibility::Hidden);
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor: カーソル非表示"));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+// リザルト
+// =============================================================================
+
 void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment)
 {
 	LastScore   = Score;
 	LastComment = Comment;
 
-	if (!ResultWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: ResultWidgetClass が未設定"));
-		return;
-	}
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ShowResult %d"), Score);
 
 	APlayerController* PC = GetOwningPlayerController();
-	if (!PC)
+	if (!PC || !ResultWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: PlayerController が null"));
+		UE_LOG(LogTemp, Warning, TEXT("ShowResult: PC または ResultWidgetClass が null"));
 		return;
 	}
 
-	// 既存リザルトが残っていれば先に破棄
 	if (ResultWidget)
 	{
 		ResultWidget->RemoveFromParent();
@@ -164,152 +231,336 @@ void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment)
 	}
 
 	ResultWidget = CreateWidget<UUserWidget>(PC, ResultWidgetClass);
-	if (!ResultWidget)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: ResultWidget の生成に失敗"));
-		return;
-	}
-
-	// 位置・サイズをメイン画面全体に合わせる
-	ResultWidget->SetPositionInViewport(FVector2D::ZeroVector, /*bRemoveDPIScale=*/false);
-	ResultWidget->SetDesiredSizeInViewport(FVector2D(MainWidth, MainHeight));
+	if (!ResultWidget) { return; }
 
 	ResultWidget->AddToViewport(300);
 
-	// Score / Comment の反映は UMG の Binding（LastScore / LastComment）で行う。
-	// IMG_Photo への M_PhotoDisplay セット、TXT_Score / TXT_Comment の更新は
-	// Widget Blueprint の Event Construct / Binding で実装すること。
+	// IMG_Photo へマテリアル適用
+	if (PhotoDisplayMaterial)
+	{
+		if (UImage* PhotoImg = Cast<UImage>(
+				ResultWidget->GetWidgetFromName(TEXT("IMG_Photo"))))
+		{
+			PhotoImg->SetBrushFromMaterial(PhotoDisplayMaterial);
+		}
+	}
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult: Score=%d Comment=%s"), Score, *Comment);
+	// TXT_Score
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			ResultWidget->GetWidgetFromName(TEXT("TXT_Score"))))
+	{
+		TxtScore->SetText(FText::AsNumber(Score));
+	}
+
+	// TXT_Comment
+	if (UTextBlock* TxtComment = Cast<UTextBlock>(
+			ResultWidget->GetWidgetFromName(TEXT("TXT_Comment"))))
+	{
+		TxtComment->SetText(FText::FromString(Comment));
+	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideResult()
 {
-	if (!ResultWidget)
+	if (ResultWidget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideResult: ResultWidget が null"));
-		return;
+		ResultWidget->RemoveFromParent();
+		ResultWidget = nullptr;
 	}
-	ResultWidget->RemoveFromParent();
-	ResultWidget = nullptr;
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideResult: リザルト破棄"));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
-{
-	CachedDirts = Dirts;
+// =============================================================================
+// ミッション
+// =============================================================================
 
-	// DirtOverlayWidget は CachedDirts を Binding で参照し、
-	// 各要素の NormalizedPosition・Opacity・Size に基づいてスプラットを描画すること。
-
-	UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::UpdateDirtDisplay: 汚れ数=%d"), CachedDirts.Num());
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::ShowMissionDisplay(const FText& MissionText, UTexture2D* TargetImage)
 {
 	CurrentMissionText = MissionText;
 
-	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) { return; }
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: ShowMissionDisplay %s"),
+		*MissionText.ToString());
 
-	if (!MissionWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD::ShowMissionDisplay: MissionWidgetClass が未設定"));
-		return;
-	}
+	if (!MissionWidget) { return; }
 
-	// Widget がなければ生成
-	if (!MissionWidget)
-	{
-		MissionWidget = CreateWidget<UUserWidget>(PC, MissionWidgetClass);
-		if (!MissionWidget)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD::ShowMissionDisplay: Widget 生成に失敗"));
-			return;
-		}
-
-		MissionWidget->AddToViewport(250);
-	}
-
-	// 右上に配置（MainWidth - 500, 30）、サイズ 450×100
-	const FVector2D Pos(MainWidth - 500.f, 30.f);
-	const FVector2D Size(450.f, 100.f);
-	MissionWidget->SetPositionInViewport(Pos, /*bRemoveDPIScale=*/false);
-	MissionWidget->SetDesiredSizeInViewport(Size);
 	MissionWidget->SetVisibility(ESlateVisibility::Visible);
 
-	// IMG_TargetPreview にプレビュー画像をセット
-	UImage* PreviewImg = Cast<UImage>(
-		MissionWidget->GetWidgetFromName(TEXT("IMG_TargetPreview")));
-	if (PreviewImg && TargetImage)
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			MissionWidget->GetWidgetFromName(TEXT("TXT_Mission"))))
 	{
-		PreviewImg->SetBrushFromTexture(TargetImage);
+		Txt->SetText(MissionText);
 	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaHUD::ShowMissionDisplay: '%s' Image=%s"),
-		*MissionText.ToString(),
-		TargetImage ? *TargetImage->GetName() : TEXT("none"));
+	if (TargetImage)
+	{
+		if (UImage* Img = Cast<UImage>(
+				MissionWidget->GetWidgetFromName(TEXT("IMG_TargetPreview"))))
+		{
+			Img->SetBrushFromTexture(TargetImage);
+		}
+	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-void ATomatinaHUD::ShowMissionText(const FText& Text)
-{
-	ShowMissionDisplay(Text, nullptr);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideMissionText()
 {
 	if (MissionWidget)
 	{
 		MissionWidget->SetVisibility(ESlateVisibility::Hidden);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionText: 非表示"));
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::ShowMissionResult(int32 Score, const FString& Comment)
 {
 	MissionResultScore   = Score;
 	MissionResultComment = Comment;
 
 	APlayerController* PC = GetOwningPlayerController();
-	if (!PC) { return; }
+	if (!PC || !MissionResultWidgetClass) { return; }
 
-	if (!MissionResultWidgetClass)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD::ShowMissionResult: MissionResultWidgetClass が未設定"));
-		return;
-	}
-
-	// 既存インスタンスがあれば再利用
 	if (!MissionResultWidget)
 	{
 		MissionResultWidget = CreateWidget<UUserWidget>(PC, MissionResultWidgetClass);
-		if (MissionResultWidget) { MissionResultWidget->AddToViewport(275); }
+		if (MissionResultWidget)
+		{
+			MissionResultWidget->AddToViewport(275);
+		}
 	}
 
-	if (MissionResultWidget)
+	if (!MissionResultWidget) { return; }
+	MissionResultWidget->SetVisibility(ESlateVisibility::Visible);
+
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			MissionResultWidget->GetWidgetFromName(TEXT("TXT_Score"))))
 	{
-		MissionResultWidget->SetVisibility(ESlateVisibility::Visible);
-		UE_LOG(LogTemp, Log,
-			TEXT("ATomatinaHUD::ShowMissionResult: Score=%d Comment=%s"), Score, *Comment);
+		TxtScore->SetText(FText::AsNumber(Score));
+	}
+	if (UTextBlock* TxtComment = Cast<UTextBlock>(
+			MissionResultWidget->GetWidgetFromName(TEXT("TXT_Comment"))))
+	{
+		TxtComment->SetText(FText::FromString(Comment));
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 void ATomatinaHUD::HideMissionResult()
 {
 	if (MissionResultWidget)
 	{
 		MissionResultWidget->SetVisibility(ESlateVisibility::Hidden);
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaHUD::HideMissionResult: 非表示"));
 	}
+}
+
+// =============================================================================
+// タイマー／スコア
+// =============================================================================
+
+void ATomatinaHUD::UpdateTimer(float RemainingSeconds)
+{
+	if (!MissionWidget) { return; }
+
+	if (UTextBlock* TxtTimer = Cast<UTextBlock>(
+			MissionWidget->GetWidgetFromName(TEXT("TXT_Timer"))))
+	{
+		TxtTimer->SetText(FText::FromString(
+			FString::Printf(TEXT("残り %.1f秒"), FMath::Max(0.f, RemainingSeconds))));
+	}
+}
+
+void ATomatinaHUD::UpdateTotalScore(int32 TotalScore)
+{
+	CurrentTotalScore = TotalScore;
+
+	if (!MissionWidget) { return; }
+
+	if (UTextBlock* TxtTotal = Cast<UTextBlock>(
+			MissionWidget->GetWidgetFromName(TEXT("TXT_TotalScore"))))
+	{
+		TxtTotal->SetText(FText::FromString(FString::FromInt(TotalScore)));
+	}
+}
+
+// =============================================================================
+// シャッターフラッシュ
+// =============================================================================
+
+void ATomatinaHUD::PlayShutterFlash()
+{
+	if (!FlashWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PlayShutterFlash: FlashWidgetClass 未設定"));
+		return;
+	}
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) { return; }
+
+	if (FlashWidget)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(FlashTimerHandle);
+		FlashWidget->RemoveFromParent();
+		FlashWidget = nullptr;
+	}
+
+	FlashWidget = CreateWidget<UUserWidget>(PC, FlashWidgetClass);
+	if (!FlashWidget) { return; }
+
+	FlashAlpha = 1.0f;
+	FlashWidget->SetRenderOpacity(FlashAlpha);
+	FlashWidget->AddToViewport(500);
+
+	GetWorld()->GetTimerManager().SetTimer(
+		FlashTimerHandle,
+		[this]()
+		{
+			FlashAlpha -= 0.1f;
+			if (FlashWidget)
+			{
+				FlashWidget->SetRenderOpacity(FMath::Max(0.0f, FlashAlpha));
+			}
+			if (FlashAlpha <= 0.0f)
+			{
+				GetWorld()->GetTimerManager().ClearTimer(FlashTimerHandle);
+				if (FlashWidget)
+				{
+					FlashWidget->RemoveFromParent();
+					FlashWidget = nullptr;
+				}
+			}
+		},
+		0.02f, /*bLoop=*/true);
+}
+
+// =============================================================================
+// 最終リザルト
+// =============================================================================
+
+void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
+{
+	if (!FinalResultWidget) { return; }
+
+	FinalResultWidget->SetVisibility(ESlateVisibility::Visible);
+
+	if (UTextBlock* TxtScore = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_FinalScore"))))
+	{
+		TxtScore->SetText(FText::FromString(
+			FString::Printf(TEXT("合計スコア: %d"), InTotalScore)));
+	}
+
+	const float Avg = (MissionCount > 0)
+		? static_cast<float>(InTotalScore) / static_cast<float>(MissionCount)
+		: 0.f;
+
+	FString Rank;
+	if      (Avg >= 90.f) Rank = TEXT("S");
+	else if (Avg >= 75.f) Rank = TEXT("A");
+	else if (Avg >= 50.f) Rank = TEXT("B");
+	else                  Rank = TEXT("C");
+
+	if (UTextBlock* TxtRank = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_Rank"))))
+	{
+		TxtRank->SetText(FText::FromString(Rank));
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD::ShowFinalResult: Total=%d Avg=%.1f Rank=%s"),
+		InTotalScore, Avg, *Rank);
+}
+
+// =============================================================================
+// 汚れ
+// =============================================================================
+
+void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
+{
+	CachedDirts = Dirts;
+
+	if (!DirtOverlayWidget) { return; }
+
+	UCanvasPanel* CanvasPanel = Cast<UCanvasPanel>(
+		DirtOverlayWidget->GetWidgetFromName(TEXT("DirtCanvas")));
+	if (!CanvasPanel)
+	{
+		// 後方互換：CanvasPanel_0 も見る
+		CanvasPanel = Cast<UCanvasPanel>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("CanvasPanel_0")));
+	}
+	if (!CanvasPanel) { return; }
+
+	CanvasPanel->ClearChildren();
+
+	for (const FDirtSplat& Dirt : Dirts)
+	{
+		if (!Dirt.bActive) { continue; }
+
+		// メインモニター側
+		UImage* MainDirt = NewObject<UImage>(DirtOverlayWidget);
+		if (DirtTexture) { MainDirt->SetBrushFromTexture(DirtTexture); }
+		MainDirt->SetRenderOpacity(Dirt.Opacity);
+		if (UCanvasPanelSlot* S = CanvasPanel->AddChildToCanvas(MainDirt))
+		{
+			S->SetPosition(FVector2D(
+				Dirt.NormalizedPosition.X * MainWidth,
+				Dirt.NormalizedPosition.Y * MainHeight));
+			S->SetSize(FVector2D(Dirt.Size * MainWidth, Dirt.Size * MainWidth));
+		}
+
+		// iPhone 側（メインモニター右に配置）
+		UImage* PhoneDirt = NewObject<UImage>(DirtOverlayWidget);
+		if (DirtTexture) { PhoneDirt->SetBrushFromTexture(DirtTexture); }
+		PhoneDirt->SetRenderOpacity(Dirt.Opacity);
+		if (UCanvasPanelSlot* S = CanvasPanel->AddChildToCanvas(PhoneDirt))
+		{
+			S->SetPosition(FVector2D(
+				MainWidth + Dirt.NormalizedPosition.X * PhoneWidth,
+				Dirt.NormalizedPosition.Y * PhoneHeight));
+			S->SetSize(FVector2D(Dirt.Size * PhoneWidth, Dirt.Size * PhoneWidth));
+		}
+	}
+}
+
+// =============================================================================
+// タオル
+// =============================================================================
+
+void ATomatinaHUD::UpdateTowelStatus(float DurabilityPercent, bool bSwapping)
+{
+	if (!DirtOverlayWidget) { return; }
+
+	if (UProgressBar* PB = Cast<UProgressBar>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("PB_TowelStamina"))))
+	{
+		PB->SetPercent(DurabilityPercent);
+		PB->SetFillColorAndOpacity(bSwapping ? FLinearColor::Red : FLinearColor::Green);
+	}
+
+	if (UTextBlock* TxtSwap = Cast<UTextBlock>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_SwapMessage"))))
+	{
+		if (bSwapping)
+		{
+			TxtSwap->SetText(FText::FromString(TEXT("タオル交換中...")));
+			TxtSwap->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			TxtSwap->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+}
+
+// =============================================================================
+// DirtManager ヘルパー
+// =============================================================================
+
+ATomatoDirtManager* ATomatinaHUD::GetDirtManager()
+{
+	if (!CachedDirtManager)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			CachedDirtManager = Cast<ATomatoDirtManager>(
+				UGameplayStatics::GetActorOfClass(World, ATomatoDirtManager::StaticClass()));
+		}
+	}
+	return CachedDirtManager;
 }
