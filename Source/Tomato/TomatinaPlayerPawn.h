@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/DefaultPawn.h"
+#include "InputActionValue.h"
 #include "TomatinaPlayerPawn.generated.h"
 
 class UCameraComponent;
 class USceneCaptureComponent2D;
 class ATomatinaHUD;
 class APlayerController;
+class UInputMappingContext;
+class UInputAction;
 
 /**
  * プレイヤーが操作するポーン。
@@ -92,22 +95,43 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
 
+	// -------------------------------------------------------------------------
+	// Enhanced Input
+	// -------------------------------------------------------------------------
+
+	/** デフォルト Input Mapping Context（BP_TomatinaPlayerPawn の Detail で設定） */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputMappingContext* DefaultMappingContext = nullptr;
+
+	/** 右クリック Input Action（IA_RightMouse） */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputAction* IA_RightMouse = nullptr;
+
+	/** 左クリック Input Action（IA_LeftMouse） */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
+	UInputAction* IA_LeftMouse = nullptr;
+
+	// -------------------------------------------------------------------------
+	// テストモード
+	// -------------------------------------------------------------------------
+
+	/** true: PiP プレビューをメインモニターに表示する（開発用） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
+	bool bTestMode = true;
+
 protected:
 	// -------------------------------------------------------------------------
 	// 入力ハンドラ
 	// -------------------------------------------------------------------------
 
 	/** 右クリック押下：ズーム開始 */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	void OnRightMousePressed();
+	void OnRightMousePressed(const FInputActionValue& Value);
 
 	/** 右クリック解放：ズーム解除 */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	void OnRightMouseReleased();
+	void OnRightMouseReleased(const FInputActionValue& Value);
 
 	/** 左クリック押下：撮影 */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	void OnLeftMousePressed();
+	void OnLeftMousePressed(const FInputActionValue& Value);
 
 private:
 	/** キャッシュ済みプレイヤーコントローラー */
