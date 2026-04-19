@@ -38,7 +38,7 @@ struct FDirtSplat
 // ─────────────────────────────────────────────────────────────────────────────
 // ATomatoDirtManager
 // ─────────────────────────────────────────────────────────────────────────────
-UCLASS(Blueprintable)
+UCLASS()
 class TOMATO_API ATomatoDirtManager : public AActor
 {
 	GENERATED_BODY()

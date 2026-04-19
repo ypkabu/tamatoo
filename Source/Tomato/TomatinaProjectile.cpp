@@ -123,22 +123,11 @@ void ATomatinaProjectile::OnHitCamera()
 		DirtMgr->AddDirt(SplatPos, SplatSize);
 	}
 
-	// ⑦ 着弾パーティクル
-	if (SplatEffect)
-	{
-		UGameplayStatics::SpawnEmitterAtLocation(
-			GetWorld(), SplatEffect, GetActorLocation());
-	}
-
-	// ⑦ 着弾サウンド
-	if (SplatSound)
-	{
-		UGameplayStatics::PlaySound2D(this, SplatSound);
-	}
-
 	UE_LOG(LogTemp, Log,
 		TEXT("ATomatinaProjectile::OnHitCamera: pos=(%.2f,%.2f) size=%.3f"),
 		SplatPos.X, SplatPos.Y, SplatSize);
+
+	// 着弾エフェクト・SE は BP 派生クラスで BlueprintNativeEvent として追加可能
 }
 
 // =============================================================================

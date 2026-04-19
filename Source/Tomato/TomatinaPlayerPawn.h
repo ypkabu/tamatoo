@@ -4,18 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/DefaultPawn.h"
-#include "InputActionValue.h"
 #include "TomatinaPlayerPawn.generated.h"
 
 class UCameraComponent;
 class USceneCaptureComponent2D;
+class ATomatinaHUD;
 class APlayerController;
-class UInputMappingContext;
-class UInputAction;
 
 /**
- * プレイヤーポーン。メインカメラと SceneCapture によるズーム撮影を持つ。
- * 位置制御は一切行わない（UpdateCursorPosition のみ例外）。
+ * プレイヤーが操作するポーン。
+ * メインカメラと SceneCapture によるズーム撮影機能を持つ。
  */
 UCLASS()
 class TOMATO_API ATomatinaPlayerPawn : public ADefaultPawn
@@ -33,9 +31,11 @@ public:
 	// コンポーネント
 	// -------------------------------------------------------------------------
 
+	/** メインモニター用カメラ（固定） */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
 	UCameraComponent* PlayerCamera;
 
+	/** ズーム用 SceneCapture（PlayerCamera の子） */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Camera")
 	USceneCaptureComponent2D* SceneCapture_Zoom;
 
@@ -56,14 +56,6 @@ public:
 	float PhoneHeight = 768.f;
 
 	// -------------------------------------------------------------------------
-	// テストモード（PiP プレビュー）
-	// -------------------------------------------------------------------------
-
-	/** true: メインモニター上にズーム映像の PiP プレビューを出す */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Test")
-	bool bTestMode = true;
-
-	// -------------------------------------------------------------------------
 	// ズーム状態
 	// -------------------------------------------------------------------------
 
@@ -76,56 +68,49 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category="Zoom")
 	bool bCursorCentered = false;
 
+	/** ズームなし時の FOV */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float DefaultFOV = 90.f;
 
+	/** ズーム時の FOV */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float ZoomFOV = 30.f;
 
+	/** ZoomAlpha の補間速度（1/0.3 ≈ 3.3 で 0.3 秒到達） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float ZoomSpeed = 3.3f;
 
+	/** ズーム進行度（0 = 未ズーム、1 = フルズーム） */
 	UPROPERTY(BlueprintReadWrite, Category="Zoom")
 	float ZoomAlpha = 0.f;
 
+	/** ズーム完了後のマウスルック速度 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float MoveSpeed = 500.f;
 
+	/** クリック地点を中心に持ってくるための SceneCapture ローカルオフセット */
 	UPROPERTY(BlueprintReadWrite, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
 
-	// -------------------------------------------------------------------------
-	// Enhanced Input
-	// -------------------------------------------------------------------------
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputMappingContext* DefaultMappingContext;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputAction* IA_RightMouse;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputAction* IA_LeftMouse;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	UInputAction* IA_Look;
-
-	UPROPERTY()
-	FVector2D CurrentLookInput = FVector2D::ZeroVector;
-
 protected:
+	// -------------------------------------------------------------------------
+	// 入力ハンドラ
+	// -------------------------------------------------------------------------
+
+	/** 右クリック押下：ズーム開始 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void OnRightMousePressed();
 
+	/** 右クリック解放：ズーム解除 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void OnRightMouseReleased();
 
+	/** 左クリック押下：撮影 */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void OnLeftMousePressed();
 
-	void OnLook(const FInputActionValue& Value);
-
 private:
+	/** キャッシュ済みプレイヤーコントローラー */
 	UPROPERTY()
 	APlayerController* PC;
 };
