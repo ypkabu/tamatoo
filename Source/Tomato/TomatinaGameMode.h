@@ -10,53 +10,47 @@
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UTexture2D;
-class ATomatinaTowelSystem;
+class USoundBase;
 class ATomatinaTargetSpawner;
 class ATomatinaHUD;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // FMissionData — 1 ミッション分の設定
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 USTRUCT(BlueprintType)
 struct FMissionData
 {
 	GENERATED_BODY()
 
-	/** お題タグ（ATomatinaTargetBase::MyType と照合） */
+	/** お題タグ。ATomatinaTargetBase::MyType と照合 */
 	UPROPERTY(EditAnywhere)
 	FName TargetType;
 
-	/** 画面に表示するお題テキスト（「ゴリラを撮れ！」） */
+	/** お題テキスト（例：「ゴリラを撮れ！」） */
 	UPROPERTY(EditAnywhere)
 	FText DisplayText;
 
-	/** 制限時間（秒）。0 なら無制限 */
+	/** 制限時間（秒）。0 以下なら無制限 */
 	UPROPERTY(EditAnywhere)
 	float TimeLimit = 15.0f;
 
-	/** スポーンするターゲットの Blueprint クラス */
+	/** スポーンするターゲット BP クラス */
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<ATomatinaTargetBase> TargetClass;
 
-	/** 同時に何体出すか */
+	/** 同時スポーン数 */
 	UPROPERTY(EditAnywhere)
 	int32 SpawnCount = 1;
 
-	/**
-	 * 使用するスポーン設定の名前。
-	 * ATomatinaTargetSpawner::SpawnProfiles から検索する。
-	 */
+	/** ATomatinaTargetSpawner::SpawnProfiles から検索するプロファイル名 */
 	UPROPERTY(EditAnywhere)
 	FName SpawnProfileName;
 
-	/** ターゲットのプレビュー画像。HUD の IMG_TargetPreview に表示する */
-	UPROPERTY(EditAnywhere, Category="Mission")
+	/** ターゲットのプレビュー画像（HUD の IMG_TargetPreview に表示） */
+	UPROPERTY(EditAnywhere)
 	UTexture2D* TargetImage = nullptr;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ATomatinaGameMode
-// ─────────────────────────────────────────────────────────────────────────────
 UCLASS()
 class TOMATO_API ATomatinaGameMode : public AGameModeBase
 {
@@ -68,123 +62,83 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	// =========================================================================
-	// ミッション
-	// =========================================================================
-
-	/** エディタで設定するミッション一覧 */
+	// ── ミッション一覧 ───────────────────────────────────────
 	UPROPERTY(EditAnywhere, Category="Tomatina|Mission")
 	TArray<FMissionData> Missions;
 
-	/**
-	 * true: BeginPlay で Missions をシャッフルしてランダム順に出題する。
-	 * false: 配列の順番通りに出題する。
-	 */
 	UPROPERTY(EditAnywhere, Category="Tomatina|Mission")
 	bool bRandomOrder = true;
 
-	/** 現在のミッションインデックス */
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Mission")
 	int32 CurrentMissionIndex = 0;
 
-	/** 現在のお題タグ（CalculatePhotoScore に渡す） */
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Mission")
 	FName CurrentMission;
 
-	// =========================================================================
-	// スコア
-	// =========================================================================
-
+	// ── スコア ───────────────────────────────────────────────
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
 	int32 CurrentScore = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Score")
 	int32 TotalScore = 0;
 
-	// =========================================================================
-	// レンダーターゲット・画面サイズ
-	// =========================================================================
-
+	// ── レンダーターゲット・音 ──────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
 	UTextureRenderTarget2D* RT_Photo = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
-	float PhoneWidth = 1024.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
+	USoundBase* ShutterSound = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Photo")
-	float PhoneHeight = 768.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
+	USoundBase* BGM = nullptr;
 
-	// =========================================================================
-	// リザルト
-	// =========================================================================
-
-	/** リザルト表示秒数 */
+	// ── リザルト表示時間 ──────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
-	float ResultDisplayTime = 2.0f;
+	float ResultDisplayTime = 3.0f;
 
-	/** リザルト表示中フラグ（二重撮影防止） */
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Result")
-	bool bIsShowingResult = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
+	float MissionResultDisplayTime = 2.0f;
 
-	// =========================================================================
-	// タイマー（Tick で毎フレーム更新）
-	// =========================================================================
-
-	/** 現在のミッションの残り時間（秒）。-1 なら無制限 or 終了済 */
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Timer")
-	float RemainingTime = -1.f;
-
-	// =========================================================================
-	// カウントダウン（ゲーム開始前 3-2-1）
-	// =========================================================================
-
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Countdown")
+	// ── 内部状態 ──────────────────────────────────────────────
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	bool bInCountdown = false;
 
-	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Countdown")
-	float CountdownRemaining = 0.f;
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
+	bool bIsShowingResult = false;
 
-	// =========================================================================
-	// 関数
-	// =========================================================================
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
+	bool bIsShowingMissionResult = false;
 
-	/**
-	 * 撮影処理のエントリポイント。
-	 * bIsShowingResult 中は無視（二重撮影防止）。
-	 */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
+	float RemainingTime = -1.f;
+
+	// ── 撮影（PlayerPawn から呼ばれる） ────────────────────────
 	UFUNCTION(BlueprintCallable, Category="Tomatina|Photo")
 	void TakePhoto(USceneCaptureComponent2D* ZoomCamera);
 
-	/** 指定インデックスのミッションを開始する */
 	UFUNCTION(BlueprintCallable, Category="Tomatina|Mission")
 	void StartMission(int32 Index);
 
-protected:
-	/** ResultDisplayTime 経過後のタイマーコールバック */
-	UFUNCTION()
-	void OnResultTimerEnd();
-
-	/** 制限時間切れのタイマーコールバック */
-	UFUNCTION()
-	void OnMissionTimeUp();
-
 private:
-	FTimerHandle ResultTimerHandle;
-	FTimerHandle MissionTimerHandle;
+	// ── 画面サイズ（PlayerPawn から取得してキャッシュ） ────────
+	float MainWidth   = 2560.f;
+	float MainHeight  = 1600.f;
+	float PhoneWidth  = 1024.f;
+	float PhoneHeight = 768.f;
+
+	// ── カウントダウン ───────────────────────────────────────
+	float CountdownRemaining = 0.f;
 	int32 LastCountdownSecond = -1;
+
+	// ── リザルト計時（FApp::GetDeltaTime 累積） ──────────────
+	float ResultElapsed = 0.f;
+	float MissionResultElapsed = 0.f;
 
 	UPROPERTY()
 	ATomatinaTargetSpawner* TargetSpawner = nullptr;
 
-	/** 全ミッション完了時の最終リザルト表示 */
-	void ShowFinalResult();
-
-	/**
-	 * Missions を Fisher-Yates アルゴリズムでシャッフルし、
-	 * 同じ TargetType が連続しないように調整する。
-	 */
 	void ShuffleMissions();
-
-	/** HUD を取得するヘルパー */
+	void ShowFinalResult();
 	ATomatinaHUD* GetTomatinaHUD() const;
+	void CachePlayerPawnSizes();
 };

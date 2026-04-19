@@ -4,84 +4,35 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
-#include "GameFramework/PlayerController.h"
-#include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 #include "TomatinaTargetBase.h"
 
-// =============================================================================
-// 共通ヘルパー：SceneCapture のビュー行列と投影パラメータを計算
-// =============================================================================
-namespace TomatinaInternal
-{
-	/**
-	 * ZoomCamera の位置・回転・FOV からビュー行列と投影係数を計算する。
-	 * @param ZoomCamera    対象の SceneCapture
-	 * @param PhoneWidth    Phone 画面の横幅
-	 * @param PhoneHeight   Phone 画面の縦幅
-	 * @param OutViewMatrix カメラ空間へ変換する行列（出力）
-	 * @param OutCotHalfFOV 1 / tan(FOV/2) （出力）
-	 * @param OutAspect     アスペクト比 W/H （出力）
-	 */
-	static void BuildViewParams(
-		USceneCaptureComponent2D* ZoomCamera,
-		float PhoneWidth,
-		float PhoneHeight,
-		FMatrix& OutViewMatrix,
-		float& OutCotHalfFOV,
-		float& OutAspect)
-	{
-		const FRotator Rot = ZoomCamera->GetComponentRotation();
-		const FVector  Loc = ZoomCamera->GetComponentLocation();
-
-		OutViewMatrix  = FRotationTranslationMatrix(Rot, Loc).InverseFast();
-		OutAspect      = (PhoneHeight > 0.f) ? (PhoneWidth / PhoneHeight) : 1.f;
-		const float HalfFOV = FMath::DegreesToRadians(ZoomCamera->FOVAngle * 0.5f);
-		OutCotHalfFOV  = 1.f / FMath::Tan(HalfFOV);
-	}
-
-	/**
-	 * カメラローカル座標を NDC（-1〜1）に変換する。
-	 * @param LocalPos    カメラ空間の座標（X = 奥行き）
-	 * @param CotHalfFOV  1 / tan(FOV/2)
-	 * @param Aspect      アスペクト比 W/H
-	 * @param OutNDC      NDC 座標（出力）
-	 * @return            カメラの前方にある（X > 0）なら true
-	 */
-	static bool LocalToNDC(
-		const FVector& LocalPos,
-		float CotHalfFOV,
-		float Aspect,
-		FVector2D& OutNDC)
-	{
-		if (LocalPos.X <= 0.f) return false;
-		OutNDC.X =  (LocalPos.Y / LocalPos.X) * CotHalfFOV / Aspect;
-		OutNDC.Y = -(LocalPos.Z / LocalPos.X) * CotHalfFOV;
-		return true;
-	}
-}
-
-// =============================================================================
-// ① CheckVisibility
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// CheckVisibility
+// NDC 判定 + ライントレース（仕様通りの実装）
+// -----------------------------------------------------------------------------
 bool UTomatinaFunctionLibrary::CheckVisibility(
 	USceneCaptureComponent2D* ZoomCamera,
-	AActor* TargetActor,
-	FVector CheckLocation,
+	AActor* Target,
+	FVector CheckLoc,
 	float ScreenWidth,
 	float ScreenHeight)
 {
-	if (!ZoomCamera || !TargetActor || !ZoomCamera->GetWorld()) { return false; }
+	UE_LOG(LogTemp, Warning, TEXT("CheckVisibility 開始"));
+
+	if (!ZoomCamera || !Target) { return false; }
+	UWorld* World = ZoomCamera->GetWorld();
+	if (!World) { return false; }
 
 	const FVector  CamLoc = ZoomCamera->GetComponentLocation();
 	const FRotator CamRot = ZoomCamera->GetComponentRotation();
 	const float    FOV    = ZoomCamera->FOVAngle;
 
-	const FVector ToTarget = CheckLocation - CamLoc;
+	const FVector ToTarget = CheckLoc - CamLoc;
 	const FVector Forward  = CamRot.Vector();
 	const FVector Right    = FRotationMatrix(CamRot).GetScaledAxis(EAxis::Y);
 	const FVector Up       = FRotationMatrix(CamRot).GetScaledAxis(EAxis::Z);
@@ -92,41 +43,32 @@ bool UTomatinaFunctionLibrary::CheckVisibility(
 
 	if (LocalX <= 1.0f) { return false; }
 
-	const float AspectRatio = (ScreenHeight > 0.f) ? ScreenWidth / ScreenHeight : 1.f;
-	const float TanHalfFOV  = FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
+	const float Aspect   = (ScreenHeight > 0.f) ? (ScreenWidth / ScreenHeight) : 1.f;
+	const float TanHalf  = FMath::Tan(FMath::DegreesToRadians(FOV * 0.5f));
 
-	const float ScreenNDC_X = (LocalY / LocalX) / TanHalfFOV;
-	const float ScreenNDC_Y = (LocalZ / LocalX) / (TanHalfFOV / AspectRatio);
+	const float ScreenX = (LocalY / LocalX) / TanHalf;
+	const float ScreenY = (LocalZ / LocalX) / (TanHalf / Aspect);
 
-	if (FMath::Abs(ScreenNDC_X) > 1.0f || FMath::Abs(ScreenNDC_Y) > 1.0f) { return false; }
+	if (FMath::Abs(ScreenX) > 1.0f || FMath::Abs(ScreenY) > 1.0f)
+	{
+		return false;
+	}
 
-	// 遮蔽チェック：ラインレース
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(ZoomCamera->GetOwner());
-
-	const bool bHit = ZoomCamera->GetWorld()->LineTraceSingleByChannel(
-		Hit, CamLoc, CheckLocation, ECC_Visibility, Params);
+	const bool bHit = World->LineTraceSingleByChannel(
+		Hit, CamLoc, CheckLoc, ECC_Visibility, Params);
 
 	if (!bHit) { return true; }
-
-	// ヒットしたアクターがターゲット本体、またはその子なら可視
-	AActor* HitActor = Hit.GetActor();
-	while (HitActor)
-	{
-		if (HitActor == TargetActor) { return true; }
-		HitActor = HitActor->GetOwner();
-	}
-
+	if (Hit.GetActor() == Target) { return true; }
 	return false;
 }
 
-// =============================================================================
-// ② CalculatePhotoScore
-//    渡された Targets を CurrentMission でフィルタし、
-//    最も画面占有率が高いターゲットを BestTarget として FPhotoResult で返す
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// CalculatePhotoScore
+// Head / Root の 2 点で CheckVisibility を呼ぶ仕様
+// -----------------------------------------------------------------------------
 FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	USceneCaptureComponent2D* ZoomCamera,
 	const TArray<ATomatinaTargetBase*>& Targets,
@@ -134,8 +76,13 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	float ScreenWidth,
 	float ScreenHeight)
 {
+	UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 開始 Mission=%s Targets=%d"),
+		*CurrentMission.ToString(), Targets.Num());
+
 	FPhotoResult Result;
-	Result.Comment = TEXT("映ってない！");
+	Result.Score      = 0;
+	Result.BestTarget = nullptr;
+	Result.Comment    = TEXT("写ってない！");
 
 	if (!ZoomCamera)
 	{
@@ -143,94 +90,79 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 		return Result;
 	}
 
-	FMatrix ViewMatrix;
-	float CotHalfFOV, Aspect;
-	TomatinaInternal::BuildViewParams(ZoomCamera, ScreenWidth, ScreenHeight,
-	                                  ViewMatrix, CotHalfFOV, Aspect);
-
-	float BestCoverage = 0.0f;
+	int32 BestScore = -1;
+	FString BestComment = TEXT("写ってない！");
+	ATomatinaTargetBase* BestActor = nullptr;
 
 	for (ATomatinaTargetBase* Target : Targets)
 	{
-		if (!IsValid(Target))                    { continue; }
-		if (Target->MyType != CurrentMission)    { continue; }
-		if (!CheckVisibility(ZoomCamera, Target, Target->GetActorLocation(), ScreenWidth, ScreenHeight)) { continue; }
+		if (!IsValid(Target)) { continue; }
+		if (Target->MyType != CurrentMission) { continue; }
 
-		// バウンドボックス 8 頂点を NDC に投影して最小・最大矩形を求める
-		FVector Origin, Extent;
-		Target->GetActorBounds(false, Origin, Extent);
+		// Head / Root 位置を取得
+		FVector HeadLoc = Target->GetActorLocation() + FVector(0.f, 0.f, 100.f);
+		FVector RootLoc = Target->GetActorLocation();
 
-		const FVector Corners[8] =
+		// SkeletalMesh にソケットがあればそちらを優先
+		if (Target->MeshComp)
 		{
-			Origin + FVector( Extent.X,  Extent.Y,  Extent.Z),
-			Origin + FVector(-Extent.X,  Extent.Y,  Extent.Z),
-			Origin + FVector( Extent.X, -Extent.Y,  Extent.Z),
-			Origin + FVector(-Extent.X, -Extent.Y,  Extent.Z),
-			Origin + FVector( Extent.X,  Extent.Y, -Extent.Z),
-			Origin + FVector(-Extent.X,  Extent.Y, -Extent.Z),
-			Origin + FVector( Extent.X, -Extent.Y, -Extent.Z),
-			Origin + FVector(-Extent.X, -Extent.Y, -Extent.Z),
-		};
-
-		float MinU = FLT_MAX, MaxU = -FLT_MAX;
-		float MinV = FLT_MAX, MaxV = -FLT_MAX;
-		int32 VisibleCount = 0;
-
-		for (const FVector& Corner : Corners)
-		{
-			const FVector LocalPos = ViewMatrix.TransformPosition(Corner);
-			FVector2D NDC;
-			if (!TomatinaInternal::LocalToNDC(LocalPos, CotHalfFOV, Aspect, NDC)) { continue; }
-
-			MinU = FMath::Min(MinU, NDC.X);
-			MaxU = FMath::Max(MaxU, NDC.X);
-			MinV = FMath::Min(MinV, NDC.Y);
-			MaxV = FMath::Max(MaxV, NDC.Y);
-			++VisibleCount;
+			if (Target->MeshComp->DoesSocketExist(TEXT("HeadSocket")))
+			{
+				HeadLoc = Target->MeshComp->GetSocketLocation(TEXT("HeadSocket"));
+			}
+			if (Target->MeshComp->DoesSocketExist(TEXT("RootSocket")))
+			{
+				RootLoc = Target->MeshComp->GetSocketLocation(TEXT("RootSocket"));
+			}
 		}
 
-		if (VisibleCount == 0) { continue; }
+		const bool bHeadVisible = CheckVisibility(ZoomCamera, Target, HeadLoc, ScreenWidth, ScreenHeight);
+		const bool bRootVisible = CheckVisibility(ZoomCamera, Target, RootLoc, ScreenWidth, ScreenHeight);
 
-		// 画面内にクランプして占有面積を算出（NDC 全画面 = 2×2 = 4）
-		const float CU0 = FMath::Clamp(MinU, -1.f, 1.f);
-		const float CU1 = FMath::Clamp(MaxU, -1.f, 1.f);
-		const float CV0 = FMath::Clamp(MinV, -1.f, 1.f);
-		const float CV1 = FMath::Clamp(MaxV, -1.f, 1.f);
+		int32   ThisScore   = 0;
+		FString ThisComment = TEXT("写ってない！");
 
-		const float Coverage = FMath::Clamp((CU1 - CU0) * (CV1 - CV0) / 4.f, 0.f, 1.f);
+		if (bHeadVisible && bRootVisible)      { ThisScore = 100; ThisComment = TEXT("全身バッチリ！"); }
+		else if (bHeadVisible)                 { ThisScore =  50; ThisComment = TEXT("上半身だけ撮れた"); }
+		else if (bRootVisible)                 { ThisScore =  10; ThisComment = TEXT("足だけ撮れた"); }
+		else                                   { ThisScore =   0; ThisComment = TEXT("写ってない！"); }
 
-		if (Coverage > BestCoverage)
+		UE_LOG(LogTemp, Warning, TEXT(" Target=%s Head=%d Root=%d Score=%d"),
+			*Target->GetName(), bHeadVisible ? 1 : 0, bRootVisible ? 1 : 0, ThisScore);
+
+		if (ThisScore > BestScore)
 		{
-			BestCoverage      = Coverage;
-			Result.BestTarget = Target;
+			BestScore   = ThisScore;
+			BestComment = ThisComment;
+			BestActor   = Target;
 		}
 	}
 
-	Result.Score = FMath::RoundToInt(BestCoverage * 100.f);
+	if (BestScore < 0) { BestScore = 0; }
 
-	// コメント生成
-	if      (Result.Score >= 100) { Result.Comment = TEXT("全身バッチリ！"); }
-	else if (Result.Score >= 50)  { Result.Comment = TEXT("上半身のみ！");   }
-	else if (Result.Score >= 10)  { Result.Comment = TEXT("足だけ...");       }
-	else                          { Result.Comment = TEXT("映ってない！");     }
+	Result.Score      = BestScore;
+	Result.Comment    = BestComment;
+	Result.BestTarget = (BestScore > 0) ? BestActor : nullptr;
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("CalculatePhotoScore: Mission='%s' Coverage=%.2f Score=%d"),
-		*CurrentMission.ToString(), BestCoverage, Result.Score);
+	UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 結果: Score=%d BestTarget=%s"),
+		Result.Score,
+		Result.BestTarget ? *Result.BestTarget->GetName() : TEXT("none"));
 
 	return Result;
 }
 
-// =============================================================================
-// ③ CalculateZoomOffset
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// CalculateZoomOffset
+// クリック位置をズームカメラ中心に持ってくるための相対オフセット
+// -----------------------------------------------------------------------------
 FVector UTomatinaFunctionLibrary::CalculateZoomOffset(
 	APlayerController* PC,
 	const FHitResult& HitResult,
 	UCameraComponent* Camera,
 	float CameraFOV)
 {
+	UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset 開始"));
+
 	if (!PC || !Camera)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset: PC または Camera が null"));
@@ -240,83 +172,44 @@ FVector UTomatinaFunctionLibrary::CalculateZoomOffset(
 	FVector2D ScreenPos;
 	if (!PC->ProjectWorldLocationToScreen(HitResult.ImpactPoint, ScreenPos))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset: ProjectWorldLocationToScreen に失敗"));
+		UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset: ProjectWorldLocationToScreen 失敗"));
 		return FVector::ZeroVector;
 	}
 
 	int32 ViewportX = 1, ViewportY = 1;
 	PC->GetViewportSize(ViewportX, ViewportY);
 
-	// 画面中心からの正規化オフセット（-0.5 〜 0.5）
 	const float NormX = (ScreenPos.X / static_cast<float>(ViewportX)) - 0.5f;
 	const float NormY = (ScreenPos.Y / static_cast<float>(ViewportY)) - 0.5f;
 
-	const float Distance    = FVector::Distance(Camera->GetComponentLocation(), HitResult.ImpactPoint);
-	const float HalfFOVRad  = FMath::DegreesToRadians(CameraFOV * 0.5f);
-	const float Scale       = Distance * FMath::Tan(HalfFOVRad) * 2.0f;
+	const float Distance   = FVector::Distance(Camera->GetComponentLocation(), HitResult.ImpactPoint);
+	const float HalfFOVRad = FMath::DegreesToRadians(CameraFOV * 0.5f);
+	const float Scale      = Distance * FMath::Tan(HalfFOVRad) * 2.0f;
 
-	// ローカル空間オフセット（Y = 右、Z = 上）
 	const float OffsetY =  NormX * Scale;
 	const float OffsetZ = -NormY * Scale;
 
-	UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset: Offset Y=%.1f Z=%.1f"), OffsetY, OffsetZ);
 	return FVector(0.f, OffsetY, OffsetZ);
 }
 
-// =============================================================================
-// ④ GetZoomScreenCenter
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// GetZoomScreenCenter
+// iPhone 画面がメイン画面の右側に連結されている前提で、
+// iPhone 領域の中心（＝ズーム完了時にカーソルを飛ばす座標）を返す
+// -----------------------------------------------------------------------------
 FVector2D UTomatinaFunctionLibrary::GetZoomScreenCenter(
 	float MainWidth,
 	float PhoneWidth,
 	float PhoneHeight)
 {
-	// Phone ビューが水平中央に配置されている場合の中心座標
-	const float CenterX = MainWidth * 0.5f;
-	const float CenterY = PhoneHeight * 0.5f;
-	return FVector2D(CenterX, CenterY);
+	UE_LOG(LogTemp, Warning, TEXT("GetZoomScreenCenter 呼び出し"));
+	return FVector2D(MainWidth + PhoneWidth * 0.5f, PhoneHeight * 0.5f);
 }
 
-// =============================================================================
-// ⑤ WorldToZoomScreen
-// =============================================================================
-
-FVector2D UTomatinaFunctionLibrary::WorldToZoomScreen(
-	USceneCaptureComponent2D* ZoomCamera,
-	FVector WorldLocation,
-	float PhoneWidth,
-	float PhoneHeight)
-{
-	if (!ZoomCamera)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("WorldToZoomScreen: ZoomCamera が null"));
-		return FVector2D::ZeroVector;
-	}
-
-	FMatrix ViewMatrix;
-	float CotHalfFOV, Aspect;
-	TomatinaInternal::BuildViewParams(ZoomCamera, PhoneWidth, PhoneHeight, ViewMatrix, CotHalfFOV, Aspect);
-
-	const FVector LocalPos = ViewMatrix.TransformPosition(WorldLocation);
-	FVector2D NDC;
-	if (!TomatinaInternal::LocalToNDC(LocalPos, CotHalfFOV, Aspect, NDC))
-	{
-		// カメラの後方：画面外を示す大きな値を返す
-		return FVector2D(-PhoneWidth, -PhoneHeight);
-	}
-
-	// NDC（-1〜1）→ Phone 画面ピクセル座標（0〜PhoneWidth/PhoneHeight）
-	const float PixelX = (NDC.X * 0.5f + 0.5f) * PhoneWidth;
-	const float PixelY = (NDC.Y * 0.5f + 0.5f) * PhoneHeight;
-
-	return FVector2D(PixelX, PixelY);
-}
-
-// =============================================================================
-// ⑥ ProjectZoomToMainScreen
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// ProjectZoomToMainScreen
+// SceneCapture の視線方向をメイン画面のピクセル座標に投影
+// -----------------------------------------------------------------------------
 FVector2D UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
 	APlayerController* PC,
 	USceneCaptureComponent2D* SceneCapture,
@@ -325,93 +218,40 @@ FVector2D UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
 {
 	if (!PC || !SceneCapture)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ProjectZoomToMainScreen: PC または SceneCapture が null"));
-		return FVector2D::ZeroVector;
-	}
-
-	// SceneCapture が向く遠点をメインカメラのスクリーン座標に投影
-	const FVector CaptureLocation = SceneCapture->GetComponentLocation();
-	const FVector CaptureForward  = SceneCapture->GetForwardVector();
-	const FVector TargetPoint     = CaptureLocation + CaptureForward * 10000.f;
-
-	FVector2D ScreenPos;
-	if (!PC->ProjectWorldLocationToScreen(TargetPoint, ScreenPos))
-	{
+		UE_LOG(LogTemp, Warning, TEXT("ProjectZoomToMainScreen: 引数が null"));
 		return FVector2D(MainWidth * 0.5f, MainHeight * 0.5f);
 	}
 
+	const FVector Loc  = SceneCapture->GetComponentLocation();
+	const FVector Fwd  = SceneCapture->GetForwardVector();
+	const FVector Far  = Loc + Fwd * 10000.f;
+
+	FVector2D ScreenPos;
+	if (!PC->ProjectWorldLocationToScreen(Far, ScreenPos))
+	{
+		return FVector2D(MainWidth * 0.5f, MainHeight * 0.5f);
+	}
 	return ScreenPos;
 }
 
-// =============================================================================
-// ⑦ CopyZoomToPhoto
-// =============================================================================
-
+// -----------------------------------------------------------------------------
+// CopyZoomToPhoto
+// TextureTarget 差し替え方式（RHI 非使用）— 仕様通り
+// -----------------------------------------------------------------------------
 void UTomatinaFunctionLibrary::CopyZoomToPhoto(
 	USceneCaptureComponent2D* ZoomCamera,
-	UTextureRenderTarget2D* RT_Photo)
+	UTextureRenderTarget2D* PhotoTarget)
 {
-	if (!ZoomCamera)
+	UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto 開始"));
+
+	if (!ZoomCamera || !PhotoTarget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto: ZoomCamera が null"));
-		return;
-	}
-	if (!RT_Photo)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto: RT_Photo が null"));
+		UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto: 引数が null"));
 		return;
 	}
 
-	// ZoomCamera の TextureTarget を RT_Photo に一時差し替えてキャプチャし、
-	// 完了後に元の RT_Zoom へ戻す。RHI 操作は一切使わない。
-	UTextureRenderTarget2D* OriginalTarget = ZoomCamera->TextureTarget;
-	ZoomCamera->TextureTarget = RT_Photo;
+	UTextureRenderTarget2D* Original = ZoomCamera->TextureTarget;
+	ZoomCamera->TextureTarget = PhotoTarget;
 	ZoomCamera->CaptureScene();
-	ZoomCamera->TextureTarget = OriginalTarget;
-
-	UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto: RT_Photo へキャプチャ完了"));
-}
-
-// =============================================================================
-// ⑧ NormalizeScreenPosition
-// =============================================================================
-
-FVector2D UTomatinaFunctionLibrary::NormalizeScreenPosition(
-	FVector2D ScreenPos,
-	float ScreenWidth,
-	float ScreenHeight)
-{
-	if (ScreenWidth <= 0.f || ScreenHeight <= 0.f)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("NormalizeScreenPosition: ScreenWidth/Height がゼロ以下"));
-		return FVector2D::ZeroVector;
-	}
-
-	return FVector2D(ScreenPos.X / ScreenWidth, ScreenPos.Y / ScreenHeight);
-}
-
-// =============================================================================
-// ⑨ DenormalizeToMainScreen
-// =============================================================================
-
-FVector2D UTomatinaFunctionLibrary::DenormalizeToMainScreen(
-	FVector2D NormPos,
-	float MainWidth,
-	float MainHeight)
-{
-	return FVector2D(NormPos.X * MainWidth, NormPos.Y * MainHeight);
-}
-
-// =============================================================================
-// ⑩ DenormalizeToPhoneScreen
-// =============================================================================
-
-FVector2D UTomatinaFunctionLibrary::DenormalizeToPhoneScreen(
-	FVector2D NormPos,
-	float MainWidth,
-	float PhoneWidth,
-	float PhoneHeight)
-{
-	// Phone 画面はメイン画面の右側（X 開始 = MainWidth）に配置されている想定
-	return FVector2D(MainWidth + NormPos.X * PhoneWidth, NormPos.Y * PhoneHeight);
+	ZoomCamera->TextureTarget = Original;
 }
