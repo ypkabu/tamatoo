@@ -99,6 +99,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
 	float MissionResultDisplayTime = 2.0f;
 
+	/** 撮影写真に写り込んだ汚れ 1 個あたりの減点量（負の値を推奨） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Score")
+	int32 DirtPenaltyPerSplat = -5;
+
 	// ── 内部状態 ──────────────────────────────────────────────
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	bool bInCountdown = false;
