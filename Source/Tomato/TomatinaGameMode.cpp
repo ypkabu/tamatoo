@@ -14,6 +14,7 @@
 #include "TomatinaPlayerPawn.h"
 #include "TomatinaTargetSpawner.h"
 #include "TomatinaTowelSystem.h"
+#include "TomatoDirtManager.h"
 
 ATomatinaGameMode::ATomatinaGameMode()
 {
@@ -260,10 +261,33 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		}
 	}
 
+	// ③' 写真に写り込んだ汚れの個数分を減点（写真 = 撮影時の汚れ分布そのもの）
+	TArray<FDirtSplat> ActiveDirts;
+	if (AActor* DirtActor = UGameplayStatics::GetActorOfClass(
+			GetWorld(), ATomatoDirtManager::StaticClass()))
+	{
+		if (ATomatoDirtManager* DirtMgr = Cast<ATomatoDirtManager>(DirtActor))
+		{
+			ActiveDirts = DirtMgr->GetActiveDirts();
+			const int32 DirtCount = ActiveDirts.Num();
+			if (DirtCount > 0 && DirtPenaltyPerSplat != 0)
+			{
+				const int32 Before = Score;
+				Score = FMath::Max(0, Score + DirtCount * DirtPenaltyPerSplat);
+				Comment += FString::Printf(TEXT(" 汚れ%d個で%d点減点"),
+					DirtCount, Before - Score);
+				UE_LOG(LogTemp, Warning,
+					TEXT("TakePhoto: 汚れ %d 個で減点 %d → %d"),
+					DirtCount, Before, Score);
+			}
+		}
+	}
+
 	CurrentScore = Score;
 	TotalScore  += Score;
 
-	UE_LOG(LogTemp, Warning, TEXT("TakePhoto: Score=%d Total=%d"), Score, TotalScore);
+	UE_LOG(LogTemp, Warning, TEXT("TakePhoto: Score=%d Total=%d Dirts=%d"),
+		Score, TotalScore, ActiveDirts.Num());
 
 	// ④ 撮影成功なら BestTarget を Spawner から除去
 	if (Score > 0 && TargetSpawner && Result.BestTarget)
@@ -288,7 +312,7 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
 		HUD->PlayShutterFlash();
-		HUD->ShowResult(Score, Comment);
+		HUD->ShowResult(Score, Comment, ActiveDirts);
 		HUD->UpdateTotalScore(TotalScore);
 	}
 }
