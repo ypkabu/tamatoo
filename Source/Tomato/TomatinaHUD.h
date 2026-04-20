@@ -75,6 +75,15 @@ public:
 	UTexture2D* DirtTexture = nullptr;
 
 	// =========================================================================
+	// 写真表示サイズ（WBP_PhotoResult の SplatContainer サイズと一致させる）
+	// =========================================================================
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Photo")
+	float PhotoDisplayWidth = 1024.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Photo")
+	float PhotoDisplayHeight = 768.f;
+
+	// =========================================================================
 	// 画面サイズ（PlayerPawn から BeginPlay で取得）
 	// =========================================================================
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
@@ -108,7 +117,7 @@ public:
 	// リザルト
 	// =========================================================================
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
-	void ShowResult(int32 Score, const FString& Comment);
+	void ShowResult(int32 Score, const FString& Comment, const TArray<FDirtSplat>& Dirts);
 
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
 	void HideResult();
@@ -183,4 +192,25 @@ private:
 	// シャッターフラッシュの実時間タイマー（TimeDilation=0 でも動く）
 	float FlashElapsed = 0.f;
 	bool  bFlashActive = false;
+
+	/**
+	 * 指定 CanvasPanel に汚れの UImage を動的生成する共通ヘルパー。
+	 * メイン/フォン/写真の 3 箇所から呼ばれる。
+	 *
+	 * @param OwnerWidget  NewObject の Outer として使う Widget
+	 * @param Container    汚れを追加する CanvasPanel
+	 * @param Dirts        汚れ配列
+	 * @param AreaWidth    汚れ位置・サイズの基準となる領域幅
+	 * @param AreaHeight   同、領域高さ
+	 * @param OriginX      領域の左上 X（絶対座標。例：メイン=0 / フォン=MainWidth / 写真=0）
+	 * @param OriginY      領域の左上 Y
+	 */
+	void AddDirtSplatsToCanvas(
+		UUserWidget* OwnerWidget,
+		class UCanvasPanel* Container,
+		const TArray<FDirtSplat>& Dirts,
+		float AreaWidth,
+		float AreaHeight,
+		float OriginX,
+		float OriginY);
 };
