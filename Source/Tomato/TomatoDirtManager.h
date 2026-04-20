@@ -53,13 +53,17 @@ public:
 	// 設定プロパティ
 	// =========================================================================
 
-	/** トマト飛来（汚れ生成）の基本間隔（秒） */
+	/** タイマー方式の自動生成（true でレベル開始からランダム汚れが湧く）。トマト命中で湧かせるなら false */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
+	bool bEnableAutoSpawn = false;
+
+	/** 自動生成の基本間隔（秒）。bEnableAutoSpawn が true のときだけ使う */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	float SpawnInterval = 3.0f;
 
-	/** 同時に存在できる最大汚れ数 */
+	/** 同時に存在できる最大汚れ数。超過時は AddDirt が無視される（既存の汚れは削除しない） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
-	int32 MaxDirts = 10;
+	int32 MaxDirts = 50;
 
 	// =========================================================================
 	// 操作関数

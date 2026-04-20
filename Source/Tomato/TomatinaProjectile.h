@@ -64,11 +64,15 @@ public:
 
 	/** 着弾汚れサイズの最小値（正規化座標系） */
 	UPROPERTY(EditAnywhere, Category="Tomato")
-	float SplatSizeMin = 0.08f;
+	float SplatSizeMin = 0.16f;
 
 	/** 着弾汚れサイズの最大値（正規化座標系） */
 	UPROPERTY(EditAnywhere, Category="Tomato")
-	float SplatSizeMax = 0.15f;
+	float SplatSizeMax = 0.30f;
+
+	/** トマトを破棄するまでの最大寿命（秒）。プレイヤーに当たらず消える保険。 */
+	UPROPERTY(EditAnywhere, Category="Tomato")
+	float MaxLifetime = 6.0f;
 
 	// =========================================================================
 	// 初期化
@@ -87,9 +91,21 @@ private:
 	FVector TargetLocation;
 	float   FlightProgress = 0.f;
 	float   FlightDuration = 1.f;
+	float   ElapsedTime    = 0.f;
+	bool    bHasHit        = false;
 
 	/** カメラへの着弾処理（汚れ生成 → Destroy） */
 	void OnHitCamera();
+
+	/** プレイヤーポーンとのオーバーラップで呼ばれる */
+	UFUNCTION()
+	void OnMeshOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult);
 
 	/** レベル上の ATomatoDirtManager を取得（キャッシュ付き） */
 	ATomatoDirtManager* GetDirtManager();

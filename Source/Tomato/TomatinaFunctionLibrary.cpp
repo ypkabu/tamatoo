@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
 #include "TomatinaTargetBase.h"
@@ -54,15 +55,36 @@ bool UTomatinaFunctionLibrary::CheckVisibility(
 		return false;
 	}
 
-	FHitResult Hit;
+	// ── 遮蔽判定：静的メッシュ（建造物）は無視、
+	//    スケルタルメッシュ／他 Pawn／"HidingProp" タグ付きは遮蔽とみなす
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(ZoomCamera->GetOwner());
-	const bool bHit = World->LineTraceSingleByChannel(
-		Hit, CamLoc, CheckLoc, ECC_Visibility, Params);
+	Params.AddIgnoredActor(Target);           // ターゲット自身は除外
+	Params.bTraceComplex = false;
 
-	if (!bHit) { return true; }
-	if (Hit.GetActor() == Target) { return true; }
-	return false;
+	TArray<FHitResult> Hits;
+	World->LineTraceMultiByChannel(
+		Hits, CamLoc, CheckLoc, ECC_Visibility, Params);
+
+	for (const FHitResult& H : Hits)
+	{
+		AActor* HitActor            = H.GetActor();
+		UPrimitiveComponent* HitComp = H.GetComponent();
+		if (!HitActor || !HitComp) { continue; }
+
+		// スケルタルメッシュに当たった → 遮蔽
+		if (HitComp->IsA<USkeletalMeshComponent>()) { return false; }
+
+		// 他の Pawn に当たった → 遮蔽（ターゲット以外のキャラ）
+		if (HitActor->IsA<APawn>()) { return false; }
+
+		// 「HidingProp」タグ付きアクター → 遮蔽（隠れる用の置物）
+		if (HitActor->ActorHasTag(TEXT("HidingProp"))) { return false; }
+
+		// それ以外（ワールド上の建造物の静的メッシュ等） → 無視して次へ
+	}
+
+	return true; // 最後まで遮蔽なし＝見えている
 }
 
 // -----------------------------------------------------------------------------
