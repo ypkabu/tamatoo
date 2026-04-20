@@ -178,10 +178,12 @@ void ATomatinaHUD::HideCursor()
 
 // =============================================================================
 // ShowResult — 撮影後の結果（WBP_PhotoResult）
+// IMG_Photo の上にある SplatContainer に撮影時の汚れを同じ正規化座標で重ねる
 // =============================================================================
-void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment)
+void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment, const TArray<FDirtSplat>& Dirts)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult Score=%d"), Score);
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowResult Score=%d Dirts=%d"),
+		Score, Dirts.Num());
 
 	APlayerController* PC = GetOwningPlayerController();
 	if (!PC || !PhotoResultWidgetClass)
@@ -221,6 +223,22 @@ void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment)
 			PhotoResultWidget->GetWidgetFromName(TEXT("IMG_Photo"))))
 	{
 		if (PhotoDisplayMaterial) { ImgPhoto->SetBrushFromMaterial(PhotoDisplayMaterial); }
+	}
+
+	// SplatContainer 上に同じ正規化座標で汚れを重ねる
+	// （IMG_Photo に被せる位置で WBP 側に UCanvasPanel "SplatContainer" を配置すること）
+	if (UCanvasPanel* PhotoSplat = Cast<UCanvasPanel>(
+			PhotoResultWidget->GetWidgetFromName(TEXT("SplatContainer"))))
+	{
+		AddDirtSplatsToCanvas(
+			PhotoResultWidget, PhotoSplat, Dirts,
+			PhotoDisplayWidth, PhotoDisplayHeight,
+			0.f, 0.f);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ShowResult: WBP_PhotoResult に SplatContainer が見つかりません（汚れ非表示）"));
 	}
 }
 
@@ -443,7 +461,7 @@ void ATomatinaHUD::PlayShutterFlash()
 
 // =============================================================================
 // UpdateDirtDisplay（例外2）
-// SplatContainer 内に汚れ UImage を動的生成。メイン側・iPhone 側に重複配置。
+// SplatContainer 内に汚れ UImage を動的生成。メイン側・iPhone 側の 2 箇所に配置。
 // =============================================================================
 void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 {
@@ -455,35 +473,45 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 
 	Container->ClearChildren();
 
+	// メインモニター側（領域 [0, MainWidth] × [0, MainHeight]）
+	AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
+		MainWidth, MainHeight, 0.f, 0.f);
+
+	// iPhone 側（領域 [MainWidth, MainWidth+PhoneWidth] × [0, PhoneHeight]）
+	AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
+		PhoneWidth, PhoneHeight, MainWidth, 0.f);
+}
+
+// =============================================================================
+// AddDirtSplatsToCanvas — 汚れ UImage を動的生成する共通ヘルパー
+// =============================================================================
+void ATomatinaHUD::AddDirtSplatsToCanvas(
+	UUserWidget* OwnerWidget,
+	UCanvasPanel* Container,
+	const TArray<FDirtSplat>& Dirts,
+	float AreaWidth,
+	float AreaHeight,
+	float OriginX,
+	float OriginY)
+{
+	if (!OwnerWidget || !Container) { return; }
+
 	for (const FDirtSplat& Dirt : Dirts)
 	{
 		if (!Dirt.bActive) { continue; }
 
-		// ── メイン画面側 ─────────────
-		UImage* MainImg = NewObject<UImage>(DirtOverlayWidget);
-		if (DirtTexture) { MainImg->SetBrushFromTexture(DirtTexture); }
-		MainImg->SetRenderOpacity(Dirt.Opacity);
-		if (UCanvasPanelSlot* Slot = Container->AddChildToCanvas(MainImg))
-		{
-			const float Size = Dirt.Size * MainWidth;
-			Slot->SetPosition(FVector2D(
-				Dirt.NormalizedPosition.X * MainWidth  - Size * 0.5f,
-				Dirt.NormalizedPosition.Y * MainHeight - Size * 0.5f));
-			Slot->SetSize(FVector2D(Size, Size));
-		}
+		UImage* Img = NewObject<UImage>(OwnerWidget);
+		if (DirtTexture) { Img->SetBrushFromTexture(DirtTexture); }
+		Img->SetRenderOpacity(Dirt.Opacity);
 
-		// ── iPhone 画面側 ─────────────
-		UImage* PhoneImg = NewObject<UImage>(DirtOverlayWidget);
-		if (DirtTexture) { PhoneImg->SetBrushFromTexture(DirtTexture); }
-		PhoneImg->SetRenderOpacity(Dirt.Opacity);
-		if (UCanvasPanelSlot* Slot = Container->AddChildToCanvas(PhoneImg))
-		{
-			const float Size = Dirt.Size * PhoneWidth;
-			Slot->SetPosition(FVector2D(
-				MainWidth + Dirt.NormalizedPosition.X * PhoneWidth  - Size * 0.5f,
-				Dirt.NormalizedPosition.Y * PhoneHeight              - Size * 0.5f));
-			Slot->SetSize(FVector2D(Size, Size));
-		}
+		UCanvasPanelSlot* Slot = Container->AddChildToCanvas(Img);
+		if (!Slot) { continue; }
+
+		const float Size = Dirt.Size * AreaWidth;
+		Slot->SetPosition(FVector2D(
+			OriginX + Dirt.NormalizedPosition.X * AreaWidth  - Size * 0.5f,
+			OriginY + Dirt.NormalizedPosition.Y * AreaHeight - Size * 0.5f));
+		Slot->SetSize(FVector2D(Size, Size));
 	}
 }
 
