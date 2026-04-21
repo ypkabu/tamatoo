@@ -507,10 +507,25 @@ void ATomatinaHUD::AddDirtSplatsToCanvas(
 		UCanvasPanelSlot* Slot = Container->AddChildToCanvas(Img);
 		if (!Slot) { continue; }
 
-		const float Size = Dirt.Size * AreaWidth;
+		const float Size     = Dirt.Size * AreaWidth;
+		const float HalfSize = Size * 0.5f;
+
+		// 中心座標を領域内に計算 → 汚れ全体が領域＋内側マージンに収まるようクランプ
+		float CenterX = Dirt.NormalizedPosition.X * AreaWidth;
+		float CenterY = Dirt.NormalizedPosition.Y * AreaHeight;
+
+		const float MinX = HalfSize + DirtInnerMargin;
+		const float MaxX = AreaWidth  - HalfSize - DirtInnerMargin;
+		const float MinY = HalfSize + DirtInnerMargin;
+		const float MaxY = AreaHeight - HalfSize - DirtInnerMargin;
+
+		// 汚れが領域より大きい場合はクランプできないので中央に寄せる
+		CenterX = (MinX <= MaxX) ? FMath::Clamp(CenterX, MinX, MaxX) : AreaWidth  * 0.5f;
+		CenterY = (MinY <= MaxY) ? FMath::Clamp(CenterY, MinY, MaxY) : AreaHeight * 0.5f;
+
 		Slot->SetPosition(FVector2D(
-			OriginX + Dirt.NormalizedPosition.X * AreaWidth  - Size * 0.5f,
-			OriginY + Dirt.NormalizedPosition.Y * AreaHeight - Size * 0.5f));
+			OriginX + CenterX - HalfSize,
+			OriginY + CenterY - HalfSize));
 		Slot->SetSize(FVector2D(Size, Size));
 	}
 }

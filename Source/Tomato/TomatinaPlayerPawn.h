@@ -87,6 +87,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float MoveSpeed = 500.f;
 
+	/** ズーム中の視点移動感度（値が大きいほど少ないマウス移動で大きく回る） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomLookSensitivity = 3.0f;
+
+	/** ズーム中の Pitch（上下）最大角度（±）。90 近くにすると真上／真下まで向ける */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomPitchLimit = 89.f;
+
+	/** ズーム中の Yaw（左右）最大角度（±）。180 で一周可。0 以下で制限なし */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomYawLimit = 0.f;
+
 	UPROPERTY(BlueprintReadOnly, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
 
