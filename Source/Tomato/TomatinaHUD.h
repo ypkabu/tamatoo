@@ -83,6 +83,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Photo")
 	float PhotoDisplayHeight = 768.f;
 
+	/** 汚れ表示時に確保する内側マージン（ピクセル）。汚れが画面端からさらに内側に寄る */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Dirt")
+	float DirtInnerMargin = 30.f;
+
 	// =========================================================================
 	// 画面サイズ（PlayerPawn から BeginPlay で取得）
 	// =========================================================================

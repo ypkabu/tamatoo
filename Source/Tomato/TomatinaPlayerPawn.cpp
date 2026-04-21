@@ -153,9 +153,22 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	if (bZoomComplete && !CurrentLookInput.IsNearlyZero())
 	{
 		FRotator Rel = SceneCapture_Zoom->GetRelativeRotation();
-		Rel.Yaw   += CurrentLookInput.X * MoveSpeed * RealDelta * 0.01f;
-		Rel.Pitch -= CurrentLookInput.Y * MoveSpeed * RealDelta * 0.01f;
-		Rel.Pitch  = FMath::ClampAngle(Rel.Pitch, -85.f, 85.f);
+
+		// 感度 = MoveSpeed * ZoomLookSensitivity（両方 BP でチューニング可）
+		const float Delta = MoveSpeed * ZoomLookSensitivity * RealDelta * 0.01f;
+
+		Rel.Yaw   += CurrentLookInput.X * Delta;
+		Rel.Pitch -= CurrentLookInput.Y * Delta;
+
+		// Pitch 上限（デフォルト ±89 度 = ほぼ真上／真下まで）
+		Rel.Pitch = FMath::ClampAngle(Rel.Pitch, -ZoomPitchLimit, ZoomPitchLimit);
+
+		// Yaw は 0 以下なら制限なし、正の値で ± 制限
+		if (ZoomYawLimit > 0.f)
+		{
+			Rel.Yaw = FMath::ClampAngle(Rel.Yaw, -ZoomYawLimit, ZoomYawLimit);
+		}
+
 		SceneCapture_Zoom->SetRelativeRotation(Rel);
 	}
 	CurrentLookInput = FVector2D::ZeroVector;
@@ -273,6 +286,31 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("OnLeftMousePressed: GameMode 取得失敗"));
+	}
+
+	// ── 撮影直後：ズーム解除 + カーソルをメインモニター中央に戻す ─────
+	bIsZooming      = false;
+	bZoomComplete   = false;
+	bCursorCentered = false;
+
+	if (PC)
+	{
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(InputMode);
+
+		const int32 CenterX = static_cast<int32>(MainWidth  * 0.5f);
+		const int32 CenterY = static_cast<int32>(MainHeight * 0.5f);
+		PC->SetMouseLocation(CenterX, CenterY);
+		UE_LOG(LogTemp, Warning,
+			TEXT("OnLeftMousePressed: カーソルをメインモニター中央(%d,%d)へ戻す"),
+			CenterX, CenterY);
+
+		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
+		{
+			HUD->HideCursor();
+		}
 	}
 }
 
