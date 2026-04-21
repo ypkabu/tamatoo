@@ -5,8 +5,10 @@
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
 
 #include "TomatoDirtManager.h"
+#include "TomatinaPlayerPawn.h"
 
 // =============================================================================
 // コンストラクタ
@@ -19,6 +21,12 @@ ATomatinaProjectile::ATomatinaProjectile()
 
 	TomatoMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TomatoMesh"));
 	SetRootComponent(TomatoMesh);
+
+	// オーバーラップで判定する（プレイヤーポーンと当たれば OnMeshOverlap）
+	TomatoMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	TomatoMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	TomatoMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	TomatoMesh->SetGenerateOverlapEvents(true);
 }
 
 // =============================================================================
@@ -28,6 +36,11 @@ ATomatinaProjectile::ATomatinaProjectile()
 void ATomatinaProjectile::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (TomatoMesh)
+	{
+		TomatoMesh->OnComponentBeginOverlap.AddDynamic(this, &ATomatinaProjectile::OnMeshOverlap);
+	}
 }
 
 // =============================================================================
@@ -57,16 +70,21 @@ void ATomatinaProjectile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (FlightDuration <= 0.f) { return; }
+	if (bHasHit) { return; }
 
-	FlightProgress += DeltaTime / FlightDuration;
-
-	if (FlightProgress >= 1.0f)
+	// 寿命を超えたら（プレイヤーに当たらず的外れ）破棄。汚れは生成しない
+	ElapsedTime += DeltaTime;
+	if (ElapsedTime >= MaxLifetime)
 	{
-		OnHitCamera();
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaProjectile: 寿命切れで破棄（プレイヤー未命中）"));
 		Destroy();
 		return;
 	}
+
+	if (FlightDuration <= 0.f) { return; }
+
+	// 軌道沿いに移動を続ける（命中判定は OnMeshOverlap が担当）
+	FlightProgress += DeltaTime / FlightDuration;
 
 	const float Alpha = FlightProgress;
 	FVector NewLoc    = FMath::Lerp(StartLocation, TargetLocation, Alpha);
@@ -96,7 +114,8 @@ void ATomatinaProjectile::Tick(float DeltaTime)
 	}
 	}
 
-	SetActorLocation(NewLoc);
+	// Sweep を有効にして移動中のオーバーラップを確実に拾う
+	SetActorLocation(NewLoc, /*bSweep=*/true);
 
 	// 進行方向を向く
 	const FVector Dir = (TargetLocation - NewLoc).GetSafeNormal();
@@ -104,6 +123,31 @@ void ATomatinaProjectile::Tick(float DeltaTime)
 	{
 		SetActorRotation(Dir.Rotation());
 	}
+}
+
+// =============================================================================
+// OnMeshOverlap — プレイヤーポーンに当たったときだけ汚れ生成
+// =============================================================================
+
+void ATomatinaProjectile::OnMeshOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex,
+	bool bFromSweep,
+	const FHitResult& SweepResult)
+{
+	if (bHasHit || !OtherActor || OtherActor == this) { return; }
+
+	// プレイヤーポーン（ATomatinaPlayerPawn）以外は無視
+	if (!Cast<ATomatinaPlayerPawn>(OtherActor)) { return; }
+
+	bHasHit = true;
+
+	UE_LOG(LogTemp, Log, TEXT("ATomatinaProjectile::OnMeshOverlap: プレイヤー命中 → 汚れ生成"));
+
+	OnHitCamera();
+	Destroy();
 }
 
 // =============================================================================
