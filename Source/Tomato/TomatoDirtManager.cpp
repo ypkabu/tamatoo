@@ -24,12 +24,15 @@ void ATomatoDirtManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// ── 汚れスポーンタイマー ──────────────────────────────────────────────
-	SpawnTimer -= DeltaTime;
-	if (SpawnTimer <= 0.0f)
+	// ── 汚れスポーンタイマー（bEnableAutoSpawn が true のときだけ動く） ──
+	if (bEnableAutoSpawn)
 	{
-		SpawnDirt();
-		SpawnTimer = SpawnInterval + FMath::RandRange(-1.0f, 1.0f);
+		SpawnTimer -= DeltaTime;
+		if (SpawnTimer <= 0.0f)
+		{
+			SpawnDirt();
+			SpawnTimer = SpawnInterval + FMath::RandRange(-1.0f, 1.0f);
+		}
 	}
 
 	// ── 自然減衰 ─────────────────────────────────────────────────────────
@@ -81,6 +84,15 @@ void ATomatoDirtManager::SpawnDirt()
 // ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 {
+	// MaxDirts に達していたら追加しない（既存の汚れは消さない）
+	if (DirtSplats.Num() >= MaxDirts)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatoDirtManager::AddDirt: MaxDirts(%d) に達しているため追加スキップ"),
+			MaxDirts);
+		return;
+	}
+
 	FDirtSplat NewDirt;
 	NewDirt.NormalizedPosition = NormPos;
 	NewDirt.Size               = Size;
@@ -89,12 +101,6 @@ void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 	NewDirt.bActive            = true;
 
 	DirtSplats.Add(NewDirt);
-
-	// MaxDirts を超えたら最古の汚れを削除
-	if (DirtSplats.Num() > MaxDirts)
-	{
-		DirtSplats.RemoveAt(0);
-	}
 
 	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::AddDirt: pos=(%.2f,%.2f) size=%.3f 合計=%d"),
 		NormPos.X, NormPos.Y, Size, DirtSplats.Num());
