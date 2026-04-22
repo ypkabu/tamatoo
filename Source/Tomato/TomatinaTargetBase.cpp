@@ -94,6 +94,12 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 		return;
 	}
 
+	// ── ポーズ管理（true: 凍結中なので movement Tick をスキップ） ─────────────
+	if (TickPose(DeltaTime))
+	{
+		return;
+	}
+
 	// ── 各パターンへ委譲 ────────────────────────────────────────────────────
 	switch (MovementType)
 	{
@@ -103,6 +109,51 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 	case ETargetMovement::FloatErratic:     TickFloatErratic(DeltaTime);     break;
 	case ETargetMovement::BlendWithCrowd:   TickBlendWithCrowd(DeltaTime);   break;
 	}
+}
+
+// =============================================================================
+// TickPose
+// 抽選で一時停止 → 一定時間経過で復帰。ポーズ中は movement Tick をスキップさせる
+// =============================================================================
+
+bool ATomatinaTargetBase::TickPose(float DeltaTime)
+{
+	if (!bEnablePose)
+	{
+		return false;
+	}
+
+	// すでにポーズ中：継続時間を消費して終了判定
+	if (bIsPosing)
+	{
+		PoseTimer -= DeltaTime;
+		if (PoseTimer <= 0.f)
+		{
+			bIsPosing      = false;
+			PoseCheckTimer = 0.f;
+			OnPoseEnded();
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ終了"), *GetName());
+		}
+		return true; // ポーズ中は movement を凍結
+	}
+
+	// 抽選インターバル
+	PoseCheckTimer += DeltaTime;
+	if (PoseCheckTimer >= PoseCheckInterval)
+	{
+		PoseCheckTimer = 0.f;
+		if (FMath::FRand() < PoseChance)
+		{
+			bIsPosing = true;
+			PoseTimer = PoseDuration;
+			OnPoseStarted();
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ開始 (%.2f 秒・倍率 x%.2f)"),
+				*GetName(), PoseDuration, PoseScoreMultiplier);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 // =============================================================================
