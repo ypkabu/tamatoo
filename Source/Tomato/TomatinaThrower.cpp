@@ -149,7 +149,7 @@ void ATomatinaThrower::BeginWalkIn(FVector Destination)
 void ATomatinaThrower::StartThrow()
 {
 	// このフレームで狙い先を確定（投擲時とリリース時で対象を一致させるため）
-	PendingAimLocation = PickAimLocation();
+	PendingAimLocation = PickAimLocation(bPendingAimAtPlayer);
 
 	// 体を狙う方向に向ける
 	FRotator LookRot = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PendingAimLocation);
@@ -205,7 +205,12 @@ void ATomatinaThrower::ReleaseTomato()
 	}
 
 	// StartThrow で確定済みの狙い先を使う（無ければここで再選択）
-	const FVector AimLoc = PendingAimLocation.IsZero() ? PickAimLocation() : PendingAimLocation;
+	bool bAimPlayer = bPendingAimAtPlayer;
+	FVector AimLoc  = PendingAimLocation;
+	if (AimLoc.IsZero())
+	{
+		AimLoc = PickAimLocation(bAimPlayer);
+	}
 	PendingAimLocation = FVector::ZeroVector;
 
 	const ETomatoTrajectory Traj = PickTrajectory();
@@ -216,6 +221,9 @@ void ATomatinaThrower::ReleaseTomato()
 	ATomatinaProjectile* Tomato = World->SpawnActor<ATomatinaProjectile>(
 		ProjectileClass, SpawnLoc, FRotator::ZeroRotator);
 	if (!Tomato) { return; }
+
+	// プレイヤー狙いか街狙いかを Projectile に伝える
+	Tomato->bAimedAtPlayer = bAimPlayer;
 
 	Tomato->Initialize(AimLoc, Traj);
 
@@ -233,12 +241,12 @@ void ATomatinaThrower::ReleaseTomato()
 // PickAimLocation — プレイヤー or 街中アクター/座標
 // =============================================================================
 
-FVector ATomatinaThrower::PickAimLocation()
+FVector ATomatinaThrower::PickAimLocation(bool& bOutAimAtPlayer)
 {
 	const float Roll = FMath::FRand();
-	const bool  bAimPlayer = (Roll < AimAtPlayerChance);
+	bOutAimAtPlayer  = (Roll < AimAtPlayerChance);
 
-	if (bAimPlayer)
+	if (bOutAimAtPlayer)
 	{
 		return GetPlayerLocation();
 	}
@@ -250,7 +258,12 @@ FVector ATomatinaThrower::PickAimLocation()
 
 	if (Total <= 0)
 	{
-		// フォールバック：プレイヤー
+		// シーナリ未設定の場合はランダム散布、それもオフならプレイヤー
+		if (bUseRandomScatter)
+		{
+			return GetRandomScatterLocation();
+		}
+		bOutAimAtPlayer = true;
 		return GetPlayerLocation();
 	}
 
@@ -264,7 +277,21 @@ FVector ATomatinaThrower::PickAimLocation()
 	{
 		return SceneryAimLocations[Idx - NumActors];
 	}
+	bOutAimAtPlayer = true;
 	return GetPlayerLocation();
+}
+
+// =============================================================================
+// GetRandomScatterLocation — 自分の周辺ランダム位置
+// =============================================================================
+
+FVector ATomatinaThrower::GetRandomScatterLocation() const
+{
+	const float Yaw   = FMath::FRandRange(0.f, 360.f);
+	const float Dist  = FMath::FRandRange(RandomScatterMinDistance, RandomScatterMaxDistance);
+	const float Z     = FMath::FRandRange(-RandomScatterHeightRange, RandomScatterHeightRange);
+	const FVector Dir = FRotator(0.f, Yaw, 0.f).Vector();
+	return GetActorLocation() + Dir * Dist + FVector(0.f, 0.f, Z);
 }
 
 // =============================================================================

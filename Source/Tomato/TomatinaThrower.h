@@ -117,6 +117,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float CurveChance = 0.25f;
 
+	/**
+	 * プレイヤー以外の狙いがどこも設定されてない場合、ランダム方向に投げる。
+	 * true → 自分の周辺ランダム位置に投げ散らす（街並みや群衆に当たる）
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
+	bool bUseRandomScatter = true;
+
+	/** ランダム散布距離の最小値（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw", meta=(EditCondition="bUseRandomScatter"))
+	float RandomScatterMinDistance = 800.f;
+
+	/** ランダム散布距離の最大値（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw", meta=(EditCondition="bUseRandomScatter"))
+	float RandomScatterMaxDistance = 3000.f;
+
+	/** ランダム散布の高さオフセット（cm）。負の値で下方向 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw", meta=(EditCondition="bUseRandomScatter"))
+	float RandomScatterHeightRange = 200.f;
+
 	// =========================================================================
 	// API
 	// =========================================================================
@@ -150,10 +169,12 @@ private:
 
 	/** 直近の投擲がプレイヤー狙いだったか（ReleaseTomato の発射方向に使う） */
 	FVector PendingAimLocation = FVector::ZeroVector;
+	bool    bPendingAimAtPlayer = false;
 
 	ETomatoTrajectory PickTrajectory() const;
-	FVector PickAimLocation();
+	FVector PickAimLocation(bool& bOutAimAtPlayer);
 	FVector GetPlayerLocation() const;
+	FVector GetRandomScatterLocation() const;
 
 	void TickWalk(float DeltaTime);
 	void TickActive(float DeltaTime);

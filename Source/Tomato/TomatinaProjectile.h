@@ -74,6 +74,31 @@ public:
 	UPROPERTY(EditAnywhere, Category="Tomato")
 	float MaxLifetime = 6.0f;
 
+	/**
+	 * このトマトはプレイヤーを狙ってる弾か。
+	 * true  → プレイヤー Pawn と当たって OnHitCamera を実行
+	 * false → Pawn は貫通、ワールドの Static Mesh で OnHitWorld を実行（デカール）
+	 * Thrower 側で Initialize 後にセットする。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato")
+	bool bAimedAtPlayer = true;
+
+	/** ワールド命中時に貼るデカール用マテリアル（M_TomatoDecal 等） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|WorldDecal")
+	UMaterialInterface* WorldDecalMaterial = nullptr;
+
+	/** デカールサイズの最小値（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|WorldDecal")
+	float WorldDecalSizeMin = 30.f;
+
+	/** デカールサイズの最大値（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|WorldDecal")
+	float WorldDecalSizeMax = 60.f;
+
+	/** デカールの寿命（秒）。0 以下 = 永続 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|WorldDecal")
+	float WorldDecalLifetime = 0.f;
+
 	// =========================================================================
 	// 初期化
 	// =========================================================================
@@ -96,6 +121,9 @@ private:
 
 	/** カメラへの着弾処理（汚れ生成 → Destroy） */
 	void OnHitCamera();
+
+	/** ワールドの Static Mesh への着弾処理（デカール貼り → Destroy） */
+	void OnHitWorld(UPrimitiveComponent* HitComp, const FHitResult& Hit);
 
 	/** プレイヤーポーンとのオーバーラップで呼ばれる */
 	UFUNCTION()

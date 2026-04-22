@@ -2,6 +2,7 @@
 
 #include "TomatinaProjectile.h"
 
+#include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
@@ -22,10 +23,11 @@ ATomatinaProjectile::ATomatinaProjectile()
 	TomatoMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TomatoMesh"));
 	SetRootComponent(TomatoMesh);
 
-	// オーバーラップで判定する（プレイヤーポーンと当たれば OnMeshOverlap）
+	// オーバーラップで判定する（プレイヤー Pawn or ワールド StaticMesh と接触で OnMeshOverlap）
 	TomatoMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	TomatoMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-	TomatoMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	TomatoMesh->SetCollisionResponseToChannel(ECC_Pawn,        ECR_Overlap);
+	TomatoMesh->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Overlap);
 	TomatoMesh->SetGenerateOverlapEvents(true);
 }
 
@@ -137,17 +139,39 @@ void ATomatinaProjectile::OnMeshOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (bHasHit || !OtherActor || OtherActor == this) { return; }
+	if (bHasHit || !OtherActor || OtherActor == this || !OtherComp) { return; }
 
-	// プレイヤーポーン（ATomatinaPlayerPawn）以外は無視
-	if (!Cast<ATomatinaPlayerPawn>(OtherActor)) { return; }
+	const bool bIsPlayerPawn = (Cast<ATomatinaPlayerPawn>(OtherActor) != nullptr);
+	const bool bIsAnyPawn    = OtherActor->IsA<APawn>();
 
-	bHasHit = true;
+	// プレイヤー狙い弾 vs プレイヤー Pawn → カメラ汚れ
+	if (bAimedAtPlayer && bIsPlayerPawn)
+	{
+		bHasHit = true;
+		OnHitCamera();
+		Destroy();
+		return;
+	}
 
-	UE_LOG(LogTemp, Log, TEXT("ATomatinaProjectile::OnMeshOverlap: プレイヤー命中 → 汚れ生成"));
+	// プレイヤー以外狙い弾 → Pawn は貫通（無視）
+	if (!bAimedAtPlayer && bIsAnyPawn)
+	{
+		return;
+	}
 
-	OnHitCamera();
-	Destroy();
+	// プレイヤー狙い弾だが他の Pawn に当たった → 無視（貫通）
+	if (bAimedAtPlayer && bIsAnyPawn && !bIsPlayerPawn)
+	{
+		return;
+	}
+
+	// それ以外＝ワールド（StaticMesh 等）に当たった → デカール貼って終了
+	if (!bIsAnyPawn)
+	{
+		bHasHit = true;
+		OnHitWorld(OtherComp, SweepResult);
+		Destroy();
+	}
 }
 
 // =============================================================================
@@ -173,6 +197,40 @@ void ATomatinaProjectile::OnHitCamera()
 		SplatPos.X, SplatPos.Y, SplatSize);
 
 	// 着弾エフェクト・SE は BP 派生クラスで BlueprintNativeEvent として追加可能
+}
+
+// =============================================================================
+// OnHitWorld — ワールドの StaticMesh に着弾 → 表面にデカールを貼る
+// =============================================================================
+
+void ATomatinaProjectile::OnHitWorld(UPrimitiveComponent* HitComp, const FHitResult& Hit)
+{
+	if (!WorldDecalMaterial)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaProjectile::OnHitWorld: WorldDecalMaterial 未設定"));
+		return;
+	}
+
+	const float Size = FMath::RandRange(WorldDecalSizeMin, WorldDecalSizeMax);
+	const FVector DecalSize(Size * 0.5f, Size, Size);  // X = 厚み、Y/Z = 表面サイズ
+
+	const FVector Loc        = Hit.ImpactPoint;
+	const FRotator DecalRot  = (-Hit.ImpactNormal).Rotation();
+	const float    Lifetime  = FMath::Max(0.f, WorldDecalLifetime);
+
+	UDecalComponent* Decal = UGameplayStatics::SpawnDecalAttached(
+		WorldDecalMaterial,
+		DecalSize,
+		HitComp,
+		NAME_None,
+		Loc,
+		DecalRot,
+		EAttachLocation::KeepWorldPosition,
+		Lifetime);
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaProjectile::OnHitWorld: デカール生成 size=%.1f at=(%.0f,%.0f,%.0f) Lifetime=%.1f Decal=%s"),
+		Size, Loc.X, Loc.Y, Loc.Z, Lifetime, Decal ? *Decal->GetName() : TEXT("null"));
 }
 
 // =============================================================================

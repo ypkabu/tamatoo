@@ -36,6 +36,7 @@ void ATomatoDirtManager::Tick(float DeltaTime)
 	}
 
 	// ── 自然減衰 ─────────────────────────────────────────────────────────
+	bool bDecayChanged = false;
 	for (FDirtSplat& Dirt : DirtSplats)
 	{
 		if (!Dirt.bActive) { continue; }
@@ -43,6 +44,7 @@ void ATomatoDirtManager::Tick(float DeltaTime)
 		if (Dirt.FadeSpeed > 0.0f)
 		{
 			Dirt.Opacity -= Dirt.FadeSpeed * DeltaTime;
+			bDecayChanged = true;
 			if (Dirt.Opacity <= 0.0f)
 			{
 				Dirt.Opacity  = 0.0f;
@@ -53,6 +55,11 @@ void ATomatoDirtManager::Tick(float DeltaTime)
 
 	// ── 非アクティブなものを一括削除 ─────────────────────────────────────
 	DirtSplats.RemoveAll([](const FDirtSplat& D) { return !D.bActive; });
+
+	if (bDecayChanged)
+	{
+		NotifyHUD();
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +174,8 @@ void ATomatoDirtManager::ClearDirtAt(FVector2D NormPos, float Radius)
 // ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amount)
 {
+	bool bAnyChanged = false;
+
 	for (FDirtSplat& Dirt : DirtSplats)
 	{
 		if (!Dirt.bActive) { continue; }
@@ -176,6 +185,7 @@ void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amoun
 
 		if (Dist <= EffectRange)
 		{
+			bAnyChanged = true;
 			// 中心ほど効果大（距離に応じたフォールオフ）
 			const float Falloff = 1.0f - (Dist / EffectRange);
 			Dirt.Opacity -= Amount * Falloff;
@@ -188,6 +198,12 @@ void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amoun
 	}
 
 	DirtSplats.RemoveAll([](const FDirtSplat& D) { return !D.bActive; });
+
+	// 変化があれば毎フレーム HUD を更新（透明度がスムーズに下がって見える）
+	if (bAnyChanged)
+	{
+		NotifyHUD();
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
