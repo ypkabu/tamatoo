@@ -65,18 +65,26 @@ void ATomatoDirtManager::SpawnDirt()
 		return;
 	}
 
+	// SpawnRangeMin / SpawnRangeMax は 0〜1 の正規化範囲。メイン画面内の一部領域に限定可能
+	const float MinX = FMath::Min(SpawnRangeMin.X, SpawnRangeMax.X);
+	const float MaxX = FMath::Max(SpawnRangeMin.X, SpawnRangeMax.X);
+	const float MinY = FMath::Min(SpawnRangeMin.Y, SpawnRangeMax.Y);
+	const float MaxY = FMath::Max(SpawnRangeMin.Y, SpawnRangeMax.Y);
+
 	FDirtSplat NewDirt;
-	NewDirt.NormalizedPosition = FVector2D(FMath::RandRange(0.0f, 1.0f),
-	                                       FMath::RandRange(0.0f, 1.0f));
-	NewDirt.Opacity   = 1.0f;
-	NewDirt.Size      = 100.0f;
-	NewDirt.FadeSpeed = 0.0f;
-	NewDirt.bActive   = true;
+	NewDirt.NormalizedPosition = FVector2D(FMath::RandRange(MinX, MaxX),
+	                                       FMath::RandRange(MinY, MaxY));
+	NewDirt.Opacity      = 1.0f;
+	NewDirt.Size         = FMath::RandRange(SpawnSizeMin, SpawnSizeMax);
+	NewDirt.FadeSpeed    = 0.0f;
+	NewDirt.bActive      = true;
+	NewDirt.TextureIndex = (NumDirtVariants > 1) ? FMath::RandRange(0, NumDirtVariants - 1) : 0;
 
 	DirtSplats.Add(NewDirt);
 
-	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::SpawnDirt: 汚れ生成 pos=(%.2f, %.2f) 合計=%d"),
-		NewDirt.NormalizedPosition.X, NewDirt.NormalizedPosition.Y, DirtSplats.Num());
+	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::SpawnDirt: 汚れ生成 pos=(%.2f, %.2f) size=%.3f tex=%d 合計=%d"),
+		NewDirt.NormalizedPosition.X, NewDirt.NormalizedPosition.Y,
+		NewDirt.Size, NewDirt.TextureIndex, DirtSplats.Num());
 
 	NotifyHUD();
 }
@@ -93,17 +101,38 @@ void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 		return;
 	}
 
+	// セーフティクランプ：暴走サイズが入ってきても画面が埋め尽くされないようにする
+	float SafeSize = Size;
+	if (MaxDirtSize > 0.f && SafeSize > MaxDirtSize)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatoDirtManager::AddDirt: Size=%.3f が MaxDirtSize=%.3f を超過 → クランプ"),
+			SafeSize, MaxDirtSize);
+		SafeSize = MaxDirtSize;
+	}
+	SafeSize = FMath::Max(SafeSize, 0.01f);
+
+	// SpawnRange にトマト命中位置もクランプ
+	const float RangeMinX = FMath::Min(SpawnRangeMin.X, SpawnRangeMax.X);
+	const float RangeMaxX = FMath::Max(SpawnRangeMin.X, SpawnRangeMax.X);
+	const float RangeMinY = FMath::Min(SpawnRangeMin.Y, SpawnRangeMax.Y);
+	const float RangeMaxY = FMath::Max(SpawnRangeMin.Y, SpawnRangeMax.Y);
+	const FVector2D ClampedPos(
+		FMath::Clamp(NormPos.X, RangeMinX, RangeMaxX),
+		FMath::Clamp(NormPos.Y, RangeMinY, RangeMaxY));
+
 	FDirtSplat NewDirt;
-	NewDirt.NormalizedPosition = NormPos;
-	NewDirt.Size               = Size;
+	NewDirt.NormalizedPosition = ClampedPos;
+	NewDirt.Size               = SafeSize;
 	NewDirt.Opacity            = 1.0f;
 	NewDirt.FadeSpeed          = 0.0f;
 	NewDirt.bActive            = true;
+	NewDirt.TextureIndex       = (NumDirtVariants > 1) ? FMath::RandRange(0, NumDirtVariants - 1) : 0;
 
 	DirtSplats.Add(NewDirt);
 
-	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::AddDirt: pos=(%.2f,%.2f) size=%.3f 合計=%d"),
-		NormPos.X, NormPos.Y, Size, DirtSplats.Num());
+	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::AddDirt: pos=(%.2f,%.2f) size=%.3f tex=%d 合計=%d"),
+		NormPos.X, NormPos.Y, SafeSize, NewDirt.TextureIndex, DirtSplats.Num());
 
 	NotifyHUD();
 }
