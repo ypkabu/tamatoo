@@ -74,6 +74,14 @@ public:
 	UPROPERTY(EditAnywhere, Category="HUD|Material")
 	UTexture2D* DirtTexture = nullptr;
 
+	/**
+	 * 汚れ画像のバリエーション配列。
+	 * FDirtSplat::TextureIndex で参照される。空ならフォールバックで DirtTexture を使用。
+	 * Manager 側の NumDirtVariants とサイズを合わせること。
+	 */
+	UPROPERTY(EditAnywhere, Category="HUD|Material")
+	TArray<UTexture2D*> DirtTextures;
+
 	// =========================================================================
 	// 写真表示サイズ（WBP_PhotoResult の SplatContainer サイズと一致させる）
 	// =========================================================================

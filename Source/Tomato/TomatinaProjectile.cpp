@@ -156,10 +156,11 @@ void ATomatinaProjectile::OnMeshOverlap(
 
 void ATomatinaProjectile::OnHitCamera()
 {
-	// 着弾位置はランダム（画面端を避けた 0.1〜0.9 の範囲）
+	// 着弾位置は画面全体（0〜1）のランダム。
+	// 実際の範囲制限は Manager の SpawnRangeMin/Max（AddDirt でクランプ）で制御される。
 	const FVector2D SplatPos(
-		FMath::RandRange(0.1f, 0.9f),
-		FMath::RandRange(0.1f, 0.9f));
+		FMath::RandRange(0.0f, 1.0f),
+		FMath::RandRange(0.0f, 1.0f));
 	const float SplatSize = FMath::RandRange(SplatSizeMin, SplatSizeMax);
 
 	if (ATomatoDirtManager* DirtMgr = GetDirtManager())
