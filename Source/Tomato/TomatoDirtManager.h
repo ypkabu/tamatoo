@@ -22,9 +22,9 @@ struct FDirtSplat
 	UPROPERTY(BlueprintReadWrite, Category="Dirt")
 	float Opacity = 1.0f;
 
-	/** 汚れのサイズ（スクリーンピクセル相当） */
+	/** 汚れのサイズ（正規化スケール 0〜1。1.0 で領域幅と同じサイズ） */
 	UPROPERTY(BlueprintReadWrite, Category="Dirt")
-	float Size = 100.0f;
+	float Size = 0.2f;
 
 	/** 自然減衰速度（0 = 減衰なし） */
 	UPROPERTY(BlueprintReadWrite, Category="Dirt")
@@ -64,6 +64,18 @@ public:
 	/** 同時に存在できる最大汚れ数。超過時は AddDirt が無視される（既存の汚れは削除しない） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	int32 MaxDirts = 50;
+
+	/** SpawnDirt（自動生成）で使う汚れサイズの最小値（正規化スケール 0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="0.01", ClampMax="1.0"))
+	float SpawnSizeMin = 0.16f;
+
+	/** SpawnDirt（自動生成）で使う汚れサイズの最大値（正規化スケール 0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="0.01", ClampMax="1.0"))
+	float SpawnSizeMax = 0.30f;
+
+	/** AddDirt の Size 上限（暴走防止のセーフティクランプ。0 以下で無効） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
+	float MaxDirtSize = 0.6f;
 
 	// =========================================================================
 	// 操作関数
