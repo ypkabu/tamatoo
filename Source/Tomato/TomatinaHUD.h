@@ -126,6 +126,19 @@ public:
 	void HideCursor();
 
 	// =========================================================================
+	// タオル表示（LeapMotion の手位置に追従）
+	// WBP_DirtOverlay に IMG_Towel（CanvasPanelSlot）を置いておく
+	// =========================================================================
+	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
+	void UpdateTowelPosition(FVector2D Pos);
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
+	void ShowTowel();
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
+	void HideTowel();
+
+	// =========================================================================
 	// リザルト
 	// =========================================================================
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
