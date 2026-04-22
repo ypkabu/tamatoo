@@ -507,7 +507,9 @@ void ATomatinaHUD::AddDirtSplatsToCanvas(
 		UCanvasPanelSlot* Slot = Container->AddChildToCanvas(Img);
 		if (!Slot) { continue; }
 
-		const float Size     = Dirt.Size * AreaWidth;
+		// Size は正規化スケール（0〜1）想定。1.0 を超える異常値は領域幅にクランプ
+		const float ClampedNormSize = FMath::Clamp(Dirt.Size, 0.01f, 1.0f);
+		const float Size     = ClampedNormSize * AreaWidth;
 		const float HalfSize = Size * 0.5f;
 
 		// 中心座標を領域内に計算 → 汚れ全体が領域＋内側マージンに収まるようクランプ
