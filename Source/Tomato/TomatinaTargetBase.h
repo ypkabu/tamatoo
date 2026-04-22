@@ -159,6 +159,42 @@ public:
 	float DepthSwayFrequency = 0.5f;
 
 	// =========================================================================
+	// ポーズ（一時停止して決めポーズ → 写真ボーナス）
+	// =========================================================================
+
+	/** ポーズ機能を有効にするか（Details で個別 ON/OFF） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pose")
+	bool bEnablePose = false;
+
+	/** ポーズ抽選を行う間隔（秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pose", meta=(EditCondition="bEnablePose"))
+	float PoseCheckInterval = 3.0f;
+
+	/** 抽選 1 回あたりのポーズ発生確率（0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pose", meta=(EditCondition="bEnablePose", ClampMin="0.0", ClampMax="1.0"))
+	float PoseChance = 0.3f;
+
+	/** ポーズ継続秒数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pose", meta=(EditCondition="bEnablePose"))
+	float PoseDuration = 1.5f;
+
+	/** ポーズ中に撮影されたときのスコア倍率（例: 2.0 = 2 倍） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Pose", meta=(EditCondition="bEnablePose", ClampMin="1.0"))
+	float PoseScoreMultiplier = 2.0f;
+
+	/** 現在ポーズ中か（CalculatePhotoScore から参照される） */
+	UPROPERTY(BlueprintReadOnly, Category="Pose")
+	bool bIsPosing = false;
+
+	/** ポーズ開始時に BP で再生する用のフック（アニメ等） */
+	UFUNCTION(BlueprintImplementableEvent, Category="Pose")
+	void OnPoseStarted();
+
+	/** ポーズ終了時に BP で再生する用のフック */
+	UFUNCTION(BlueprintImplementableEvent, Category="Pose")
+	void OnPoseEnded();
+
+	// =========================================================================
 	// ソケット代替：頭・ルート位置
 	// =========================================================================
 
@@ -194,10 +230,17 @@ private:
 	float DelayTimer    = 0.f;
 	bool  bActive       = false;
 
+	// ポーズ用タイマー
+	float PoseCheckTimer = 0.f;
+	float PoseTimer      = 0.f;
+
 	// ── Tick サブ関数 ────────────────────────────────────────────────────────
 	void TickDepthHideAndSeek(float DeltaTime);
 	void TickRunAcross(float DeltaTime);
 	void TickFlyArc(float DeltaTime);
 	void TickFloatErratic(float DeltaTime);
 	void TickBlendWithCrowd(float DeltaTime);
+
+	/** ポーズ抽選・継続管理。true を返したら movement Tick はスキップする */
+	bool TickPose(float DeltaTime);
 };
