@@ -188,6 +188,23 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 		SceneCapture_Zoom->SetRelativeLocation(FVector::ZeroVector);
 		SceneCapture_Zoom->SetRelativeRotation(FRotator::ZeroRotator);
 	}
+
+	// ── 非ズーム時：カーソルをメインモニター内に閉じ込める ────────────
+	// ウィンドウは Main + iPhone の横並びなので、右側 iPhone 領域に抜けていた
+	// カーソルを戻す。ズーム中はカーソル非表示 or iPhone 側に飛ばしてるので対象外。
+	if (!bIsZooming && PC->bShowMouseCursor)
+	{
+		float MX = 0.f, MY = 0.f;
+		if (PC->GetMousePosition(MX, MY))
+		{
+			const float ClampedX = FMath::Clamp(MX, 0.f, MainWidth  - 1.f);
+			const float ClampedY = FMath::Clamp(MY, 0.f, MainHeight - 1.f);
+			if (!FMath::IsNearlyEqual(ClampedX, MX) || !FMath::IsNearlyEqual(ClampedY, MY))
+			{
+				PC->SetMouseLocation(static_cast<int32>(ClampedX), static_cast<int32>(ClampedY));
+			}
+		}
+	}
 }
 
 // =============================================================================
@@ -288,7 +305,7 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 		UE_LOG(LogTemp, Error, TEXT("OnLeftMousePressed: GameMode 取得失敗"));
 	}
 
-	// ── 撮影直後：ズーム解除 + カーソルをメインモニター中央に戻す ─────
+	// ── 撮影直後：ズーム解除（カーソル位置は Tick のクランプ処理に任せる） ─
 	bIsZooming      = false;
 	bZoomComplete   = false;
 	bCursorCentered = false;
@@ -299,13 +316,6 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 		FInputModeGameAndUI InputMode;
 		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
-
-		const int32 CenterX = static_cast<int32>(MainWidth  * 0.5f);
-		const int32 CenterY = static_cast<int32>(MainHeight * 0.5f);
-		PC->SetMouseLocation(CenterX, CenterY);
-		UE_LOG(LogTemp, Warning,
-			TEXT("OnLeftMousePressed: カーソルをメインモニター中央(%d,%d)へ戻す"),
-			CenterX, CenterY);
 
 		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
 		{
