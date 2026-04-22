@@ -7,7 +7,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "TomatinaTargetBase.generated.h"
 
-class USpotLightComponent;
+class UWidgetComponent;
+class UUserWidget;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 移動パターン
@@ -49,44 +50,41 @@ public:
 	USkeletalMeshComponent* MeshComp;
 
 	// =========================================================================
-	// バックライト（ターゲットを目立たせる用のスポットライト）
+	// 目印（頭上に浮かぶアイコン Widget）
 	// =========================================================================
 
-	/** ターゲットの後ろから当てるスポットライト */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Target|Backlight")
-	USpotLightComponent* BacklightComp;
+	/** 頭上に表示する目印ウィジェット（アイコンや矢印） */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Target|Marker")
+	UWidgetComponent* MarkerWidgetComp;
 
-	/** バックライトを使うか */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight")
-	bool bEnableBacklight = true;
+	/** 目印を表示するか */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Marker")
+	bool bShowMarker = true;
 
-	/** プレイヤーカメラを基準に、後ろ側に置くまでの距離（cm） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightDistance = 250.f;
+	/** 目印ウィジェットクラス（WBP_TargetMarker 等） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Marker")
+	TSubclassOf<UUserWidget> MarkerWidgetClass;
 
-	/** バックライトの高さオフセット（cm） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightHeight = 200.f;
+	/** 頭上からの高さオフセット（cm）。0 だと頭の位置に出る */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Marker")
+	float MarkerHeightOffset = 60.f;
 
-	/** バックライトの強度 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightIntensity = 8000.f;
+	/** 目印の描画サイズ（ピクセル） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Marker")
+	FVector2D MarkerDrawSize = FVector2D(128.f, 128.f);
 
-	/** バックライトの色 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	FLinearColor BacklightColor = FLinearColor(1.0f, 0.85f, 0.6f);
+	// =========================================================================
+	// ポストプロセス アウトライン用ステンシル
+	// （BP 側で Post Process Material を組むときに使う）
+	// =========================================================================
 
-	/** バックライトの内側コーン角（度） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightInnerCone = 25.f;
+	/** MeshComp に CustomDepth (Stencil) を有効にしてターゲットだけアウトライン対象にする */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Outline")
+	bool bEnableOutlineStencil = true;
 
-	/** バックライトの外側コーン角（度） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightOuterCone = 45.f;
-
-	/** バックライトの届く距離（cm） */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
-	float BacklightAttenuation = 800.f;
+	/** ポストプロセスマテリアルで判定する Stencil 値（1〜255） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Outline", meta=(ClampMin="1", ClampMax="255"))
+	int32 OutlineStencilValue = 250;
 
 	// =========================================================================
 	// 移動パターン共通
@@ -285,7 +283,4 @@ private:
 
 	/** ポーズ抽選・継続管理。true を返したら movement Tick はスキップする */
 	bool TickPose(float DeltaTime);
-
-	/** バックライトをカメラの反対側に配置 */
-	void TickBacklight(float DeltaTime);
 };

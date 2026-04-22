@@ -3,10 +3,7 @@
 #include "TomatinaTargetBase.h"
 
 #include "Components/SkeletalMeshComponent.h"
-#include "Components/SpotLightComponent.h"
-#include "Engine/World.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
+#include "Components/WidgetComponent.h"
 
 // =============================================================================
 // コンストラクタ
@@ -19,10 +16,11 @@ ATomatinaTargetBase::ATomatinaTargetBase()
 	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
 	SetRootComponent(MeshComp);
 
-	BacklightComp = CreateDefaultSubobject<USpotLightComponent>(TEXT("BacklightComp"));
-	BacklightComp->SetupAttachment(MeshComp);
-	BacklightComp->SetCastShadows(false);   // 影で他の判定が乱れないように
-	BacklightComp->SetMobility(EComponentMobility::Movable);
+	MarkerWidgetComp = CreateDefaultSubobject<UWidgetComponent>(TEXT("MarkerWidgetComp"));
+	MarkerWidgetComp->SetupAttachment(MeshComp);
+	MarkerWidgetComp->SetWidgetSpace(EWidgetSpace::Screen); // 常にカメラを向く
+	MarkerWidgetComp->SetDrawSize(FVector2D(128.f, 128.f));
+	MarkerWidgetComp->SetRelativeLocation(FVector(0.f, 0.f, 160.f));
 }
 
 // =============================================================================
@@ -78,15 +76,23 @@ void ATomatinaTargetBase::BeginPlay()
 		MeshComp->SetVisibility(false);
 	}
 
-	// バックライトの初期設定
-	if (BacklightComp)
+	// 目印ウィジェットの初期設定
+	if (MarkerWidgetComp)
 	{
-		BacklightComp->SetVisibility(bEnableBacklight);
-		BacklightComp->SetIntensity(BacklightIntensity);
-		BacklightComp->SetLightColor(BacklightColor);
-		BacklightComp->SetInnerConeAngle(BacklightInnerCone);
-		BacklightComp->SetOuterConeAngle(BacklightOuterCone);
-		BacklightComp->SetAttenuationRadius(BacklightAttenuation);
+		if (MarkerWidgetClass)
+		{
+			MarkerWidgetComp->SetWidgetClass(MarkerWidgetClass);
+		}
+		MarkerWidgetComp->SetDrawSize(MarkerDrawSize);
+		MarkerWidgetComp->SetRelativeLocation(FVector(0.f, 0.f, MeshHeight + MarkerHeightOffset));
+		MarkerWidgetComp->SetVisibility(bShowMarker && MarkerWidgetClass != nullptr);
+	}
+
+	// アウトライン用の CustomDepth Stencil を有効化（BP のポストプロセスマテリアルで参照）
+	if (MeshComp && bEnableOutlineStencil)
+	{
+		MeshComp->SetRenderCustomDepth(true);
+		MeshComp->SetCustomDepthStencilValue(OutlineStencilValue);
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: BeginPlay Pattern=%d Delay=%.1f"),
@@ -129,48 +135,6 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 	case ETargetMovement::FloatErratic:     TickFloatErratic(DeltaTime);     break;
 	case ETargetMovement::BlendWithCrowd:   TickBlendWithCrowd(DeltaTime);   break;
 	}
-
-	TickBacklight(DeltaTime);
-}
-
-// =============================================================================
-// TickBacklight — プレイヤーカメラの反対側に配置してターゲットを照らす
-// =============================================================================
-
-void ATomatinaTargetBase::TickBacklight(float DeltaTime)
-{
-	if (!BacklightComp) { return; }
-
-	if (!bEnableBacklight)
-	{
-		if (BacklightComp->IsVisible()) { BacklightComp->SetVisibility(false); }
-		return;
-	}
-	if (!BacklightComp->IsVisible()) { BacklightComp->SetVisibility(true); }
-
-	// プレイヤーポーン位置を取得
-	APawn* PlayerPawn = nullptr;
-	if (UWorld* World = GetWorld())
-	{
-		if (APlayerController* PC = World->GetFirstPlayerController())
-		{
-			PlayerPawn = PC->GetPawn();
-		}
-	}
-	if (!PlayerPawn) { return; }
-
-	const FVector TargetLoc = GetActorLocation();
-	const FVector PlayerLoc = PlayerPawn->GetActorLocation();
-	const FVector AwayDir   = (TargetLoc - PlayerLoc).GetSafeNormal2D();
-	if (AwayDir.IsNearlyZero()) { return; }
-
-	// バックライトはターゲットの「カメラから見て奥側＋上」に置く
-	const FVector LightLoc = TargetLoc + AwayDir * BacklightDistance + FVector(0.f, 0.f, BacklightHeight);
-
-	// ターゲットを向ける（手前に光が抜けてリムライト効果）
-	const FVector LookDir = (TargetLoc - LightLoc).GetSafeNormal();
-	BacklightComp->SetWorldLocation(LightLoc);
-	BacklightComp->SetWorldRotation(LookDir.Rotation());
 }
 
 // =============================================================================
