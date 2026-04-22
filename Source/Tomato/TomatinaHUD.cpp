@@ -501,7 +501,16 @@ void ATomatinaHUD::AddDirtSplatsToCanvas(
 		if (!Dirt.bActive) { continue; }
 
 		UImage* Img = NewObject<UImage>(OwnerWidget);
-		if (DirtTexture) { Img->SetBrushFromTexture(DirtTexture); }
+
+		// TextureIndex で DirtTextures から画像を選択。範囲外なら DirtTexture にフォールバック
+		UTexture2D* UseTex = nullptr;
+		if (DirtTextures.IsValidIndex(Dirt.TextureIndex))
+		{
+			UseTex = DirtTextures[Dirt.TextureIndex];
+		}
+		if (!UseTex) { UseTex = DirtTexture; }
+		if (UseTex) { Img->SetBrushFromTexture(UseTex); }
+
 		Img->SetRenderOpacity(Dirt.Opacity);
 
 		UCanvasPanelSlot* Slot = Container->AddChildToCanvas(Img);
