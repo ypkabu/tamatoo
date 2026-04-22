@@ -162,6 +162,17 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 
 	if (BestScore < 0) { BestScore = 0; }
 
+	// ── ポーズボーナス ────────────────────────────────────────────────
+	// ポーズ中のターゲットを撮影できていたらスコアを倍率で加算
+	if (BestActor && BestActor->bEnablePose && BestActor->bIsPosing && BestScore > 0)
+	{
+		const int32 BoostedScore = FMath::RoundToInt(BestScore * BestActor->PoseScoreMultiplier);
+		UE_LOG(LogTemp, Warning, TEXT(" ポーズボーナス適用: %d → %d (x%.2f)"),
+			BestScore, BoostedScore, BestActor->PoseScoreMultiplier);
+		BestScore = BoostedScore;
+		BestComment = FString::Printf(TEXT("%s ポーズボーナス！"), *BestComment);
+	}
+
 	Result.Score      = BestScore;
 	Result.Comment    = BestComment;
 	Result.BestTarget = (BestScore > 0) ? BestActor : nullptr;
