@@ -1,12 +1,7 @@
 {
 	"folders": [
 		{
-			"name": "Tomato",
-			"path": "."
-		},
-		{
-			"name": "UE5",
-			"path": "/Users/Shared/Epic Games/UE_5.7"
+			"path": "../../大学_授業/2年前期/スクリプトプログラミング/hello"
 		}
 	],
 	"settings": {
@@ -479,8 +474,7 @@
 				"request": "launch",
 				"program": "/Users/hw25a064/GitHub/tamatoo/Binaries/Mac/UnrealGame-Mac-Debug.app/Contents/MacOS/UnrealGame-Mac-Debug",
 				"preLaunchTask": "Tomato Mac Debug Build",
-				"args": [
-				],
+				"args": [],
 				"cwd": "/Users/Shared/Epic Games/UE_5.7",
 				"type": "lldb"
 			},
@@ -489,8 +483,7 @@
 				"request": "launch",
 				"program": "/Users/hw25a064/GitHub/tamatoo/Binaries/Mac/UnrealGame-Mac-DebugGame.app/Contents/MacOS/UnrealGame-Mac-DebugGame",
 				"preLaunchTask": "Tomato Mac DebugGame Build",
-				"args": [
-				],
+				"args": [],
 				"cwd": "/Users/Shared/Epic Games/UE_5.7",
 				"type": "lldb"
 			},
@@ -499,8 +492,7 @@
 				"request": "launch",
 				"program": "/Users/hw25a064/GitHub/tamatoo/Binaries/Mac/UnrealGame.app/Contents/MacOS/UnrealGame",
 				"preLaunchTask": "Tomato Mac Development Build",
-				"args": [
-				],
+				"args": [],
 				"cwd": "/Users/Shared/Epic Games/UE_5.7",
 				"type": "lldb"
 			},
@@ -509,8 +501,7 @@
 				"request": "launch",
 				"program": "/Users/hw25a064/GitHub/tamatoo/Binaries/Mac/UnrealGame-Mac-Test.app/Contents/MacOS/UnrealGame-Mac-Test",
 				"preLaunchTask": "Tomato Mac Test Build",
-				"args": [
-				],
+				"args": [],
 				"cwd": "/Users/Shared/Epic Games/UE_5.7",
 				"type": "lldb"
 			},
@@ -519,8 +510,7 @@
 				"request": "launch",
 				"program": "/Users/hw25a064/GitHub/tamatoo/Binaries/Mac/UnrealGame-Mac-Shipping.app/Contents/MacOS/UnrealGame-Mac-Shipping",
 				"preLaunchTask": "Tomato Mac Shipping Build",
-				"args": [
-				],
+				"args": [],
 				"cwd": "/Users/Shared/Epic Games/UE_5.7",
 				"type": "lldb"
 			},
