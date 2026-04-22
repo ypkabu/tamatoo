@@ -36,9 +36,16 @@ void ATomatinaThrower::BeginPlay()
 	bStartDelayActive = (StartDelay > 0.f);
 	ThrowTimer        = ThrowInterval + FMath::RandRange(-ThrowIntervalVariance, ThrowIntervalVariance);
 
+	// Spawner が BeginWalkIn を呼ばなければ即 Active 扱い（レベル直置きにも対応）
+	if (!bHasDestination)
+	{
+		State      = EThrowerState::Active;
+		bIsWalking = false;
+	}
+
 	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaThrower [%s]: BeginPlay StartDelay=%.2f Interval=%.2f"),
-		*GetName(), StartDelay, ThrowInterval);
+		TEXT("ATomatinaThrower [%s]: BeginPlay State=%d AimAtPlayerChance=%.2f Interval=%.2f"),
+		*GetName(), static_cast<int32>(State), AimAtPlayerChance, ThrowInterval);
 }
 
 // =============================================================================
@@ -49,18 +56,57 @@ void ATomatinaThrower::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// ── StartDelay ─────────────────────────────────────────────────────────
-	if (bStartDelayActive)
+	switch (State)
 	{
-		StartDelayTimer -= DeltaTime;
-		if (StartDelayTimer <= 0.f)
-		{
-			bStartDelayActive = false;
-		}
+	case EThrowerState::WalkingIn: TickWalk(DeltaTime);   break;
+	case EThrowerState::Active:    TickActive(DeltaTime); break;
+	}
+}
+
+// =============================================================================
+// TickWalk — 目的地まで歩く
+// =============================================================================
+
+void ATomatinaThrower::TickWalk(float DeltaTime)
+{
+	const FVector Cur     = GetActorLocation();
+	const FVector ToDest  = WalkDestination - Cur;
+	const float   DistSqr = ToDest.SizeSquared2D();
+
+	if (DistSqr <= ArriveTolerance * ArriveTolerance)
+	{
+		State      = EThrowerState::Active;
+		bIsWalking = false;
+		OnArrivedAtDestination();
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: 目的地到着"), *GetName());
 		return;
 	}
 
-	// ── 振りかぶり中（モンタージュ再生済み・発射待ち） ────────────────────
+	const FVector Dir = ToDest.GetSafeNormal2D();
+	if (Dir.IsNearlyZero()) { return; }
+
+	// 進行方向を向く
+	FRotator Look = Dir.Rotation();
+	Look.Pitch = 0.f;
+	Look.Roll  = 0.f;
+	SetActorRotation(Look);
+
+	SetActorLocation(Cur + Dir * WalkSpeed * DeltaTime, /*bSweep=*/false);
+}
+
+// =============================================================================
+// TickActive — 通常時の投擲ループ
+// =============================================================================
+
+void ATomatinaThrower::TickActive(float DeltaTime)
+{
+	if (bStartDelayActive)
+	{
+		StartDelayTimer -= DeltaTime;
+		if (StartDelayTimer <= 0.f) { bStartDelayActive = false; }
+		return;
+	}
+
 	if (ReleaseTimer >= 0.f)
 	{
 		ReleaseTimer -= DeltaTime;
@@ -72,7 +118,6 @@ void ATomatinaThrower::Tick(float DeltaTime)
 		return;
 	}
 
-	// ── 次の投擲までのタイマー ─────────────────────────────────────────────
 	ThrowTimer -= DeltaTime;
 	if (ThrowTimer <= 0.f)
 	{
@@ -82,45 +127,51 @@ void ATomatinaThrower::Tick(float DeltaTime)
 }
 
 // =============================================================================
+// BeginWalkIn
+// =============================================================================
+
+void ATomatinaThrower::BeginWalkIn(FVector Destination)
+{
+	WalkDestination = Destination;
+	bHasDestination = true;
+	State           = EThrowerState::WalkingIn;
+	bIsWalking      = true;
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaThrower [%s]: 歩行開始 → (%.0f,%.0f,%.0f)"),
+		*GetName(), Destination.X, Destination.Y, Destination.Z);
+}
+
+// =============================================================================
 // StartThrow
 // =============================================================================
 
 void ATomatinaThrower::StartThrow()
 {
-	// プレイヤーの方を向く
-	if (bRotateToPlayerOnThrow)
-	{
-		const FVector AimLoc = GetAimTargetLocation();
-		FRotator LookRot     = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), AimLoc);
-		LookRot.Pitch = 0.f;
-		LookRot.Roll  = 0.f;
-		SetActorRotation(LookRot);
-	}
+	// このフレームで狙い先を確定（投擲時とリリース時で対象を一致させるため）
+	PendingAimLocation = PickAimLocation();
 
-	// モンタージュ再生
+	// 体を狙う方向に向ける
+	FRotator LookRot = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PendingAimLocation);
+	LookRot.Pitch = 0.f;
+	LookRot.Roll  = 0.f;
+	SetActorRotation(LookRot);
+
 	if (ThrowMontage && MeshComp)
 	{
 		if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
 		{
 			AnimInst->Montage_Play(ThrowMontage, ThrowMontagePlayRate);
-			UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: ThrowMontage 再生"), *GetName());
 		}
 		else
 		{
 			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaThrower [%s]: AnimInstance が無い（AnimBP 未設定）"),
-				*GetName());
+				TEXT("ATomatinaThrower [%s]: AnimInstance が無い（AnimBP 未設定）"), *GetName());
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrower [%s]: ThrowMontage 未設定 → モーション無しで発射"),
-			*GetName());
-	}
 
-	// ReleaseDelay 後に発射するためのタイマー設定
-	// 0 以下なら即発射（Anim Notify を使う場合は手動で ReleaseTomato を呼ぶ運用）
+	OnThrowStarted();
+
 	if (ReleaseDelay > 0.f)
 	{
 		ReleaseTimer = ReleaseDelay;
@@ -139,12 +190,10 @@ void ATomatinaThrower::ReleaseTomato()
 {
 	if (!ProjectileClass)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrower [%s]: ProjectileClass が未設定"), *GetName());
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrower [%s]: ProjectileClass 未設定"), *GetName());
 		return;
 	}
 
-	// 手のソケットからスポーン位置を取得
 	FVector SpawnLoc;
 	if (MeshComp && MeshComp->DoesSocketExist(HandSocketName))
 	{
@@ -153,14 +202,11 @@ void ATomatinaThrower::ReleaseTomato()
 	else
 	{
 		SpawnLoc = GetActorLocation() + GetActorForwardVector() * 50.f + FVector(0.f, 0.f, 100.f);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrower [%s]: ソケット '%s' が見つからない → アクター位置から発射"),
-			*GetName(), *HandSocketName.ToString());
 	}
 
-	const FVector AimLoc = bAimAtPlayer
-		? GetAimTargetLocation()
-		: SpawnLoc + GetActorForwardVector() * 1500.f;
+	// StartThrow で確定済みの狙い先を使う（無ければここで再選択）
+	const FVector AimLoc = PendingAimLocation.IsZero() ? PickAimLocation() : PendingAimLocation;
+	PendingAimLocation = FVector::ZeroVector;
 
 	const ETomatoTrajectory Traj = PickTrajectory();
 
@@ -169,25 +215,56 @@ void ATomatinaThrower::ReleaseTomato()
 
 	ATomatinaProjectile* Tomato = World->SpawnActor<ATomatinaProjectile>(
 		ProjectileClass, SpawnLoc, FRotator::ZeroRotator);
-
-	if (!Tomato)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrower [%s]: SpawnActor 失敗"), *GetName());
-		return;
-	}
+	if (!Tomato) { return; }
 
 	Tomato->Initialize(AimLoc, Traj);
 
 	if (Traj == ETomatoTrajectory::Curve)
 	{
-		Tomato->CurveDirection = (FMath::FRand() > 0.5f) ? 1.0f : -1.0f;
+		Tomato->CurveDirection = (FMath::FRand() > 0.5f) ? 1.f : -1.f;
 	}
 
 	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaThrower [%s]: 発射 Traj=%d From=(%.0f,%.0f,%.0f) → (%.0f,%.0f,%.0f)"),
-		*GetName(), static_cast<int32>(Traj),
-		SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z,
-		AimLoc.X, AimLoc.Y, AimLoc.Z);
+		TEXT("ATomatinaThrower [%s]: 発射 Traj=%d → (%.0f,%.0f,%.0f)"),
+		*GetName(), static_cast<int32>(Traj), AimLoc.X, AimLoc.Y, AimLoc.Z);
+}
+
+// =============================================================================
+// PickAimLocation — プレイヤー or 街中アクター/座標
+// =============================================================================
+
+FVector ATomatinaThrower::PickAimLocation()
+{
+	const float Roll = FMath::FRand();
+	const bool  bAimPlayer = (Roll < AimAtPlayerChance);
+
+	if (bAimPlayer)
+	{
+		return GetPlayerLocation();
+	}
+
+	// プレイヤー以外を狙う
+	const int32 NumActors    = SceneryAimActors.Num();
+	const int32 NumLocations = SceneryAimLocations.Num();
+	const int32 Total        = NumActors + NumLocations;
+
+	if (Total <= 0)
+	{
+		// フォールバック：プレイヤー
+		return GetPlayerLocation();
+	}
+
+	const int32 Idx = FMath::RandRange(0, Total - 1);
+	if (Idx < NumActors)
+	{
+		AActor* A = SceneryAimActors[Idx];
+		if (IsValid(A)) { return A->GetActorLocation(); }
+	}
+	else
+	{
+		return SceneryAimLocations[Idx - NumActors];
+	}
+	return GetPlayerLocation();
 }
 
 // =============================================================================
@@ -197,22 +274,16 @@ void ATomatinaThrower::ReleaseTomato()
 ETomatoTrajectory ATomatinaThrower::PickTrajectory() const
 {
 	const float Roll = FMath::FRand();
-	if (Roll < StraightChance)
-	{
-		return ETomatoTrajectory::Straight;
-	}
-	if (Roll < StraightChance + ArcChance)
-	{
-		return ETomatoTrajectory::Arc;
-	}
+	if (Roll < StraightChance)              { return ETomatoTrajectory::Straight; }
+	if (Roll < StraightChance + ArcChance)  { return ETomatoTrajectory::Arc; }
 	return ETomatoTrajectory::Curve;
 }
 
 // =============================================================================
-// GetAimTargetLocation
+// GetPlayerLocation
 // =============================================================================
 
-FVector ATomatinaThrower::GetAimTargetLocation() const
+FVector ATomatinaThrower::GetPlayerLocation() const
 {
 	if (UWorld* World = GetWorld())
 	{
