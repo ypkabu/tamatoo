@@ -7,6 +7,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "TomatinaTargetBase.generated.h"
 
+class USpotLightComponent;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 移動パターン
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +47,46 @@ public:
 	/** 被写体のビジュアルメッシュ */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target")
 	USkeletalMeshComponent* MeshComp;
+
+	// =========================================================================
+	// バックライト（ターゲットを目立たせる用のスポットライト）
+	// =========================================================================
+
+	/** ターゲットの後ろから当てるスポットライト */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Target|Backlight")
+	USpotLightComponent* BacklightComp;
+
+	/** バックライトを使うか */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight")
+	bool bEnableBacklight = true;
+
+	/** プレイヤーカメラを基準に、後ろ側に置くまでの距離（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightDistance = 250.f;
+
+	/** バックライトの高さオフセット（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightHeight = 200.f;
+
+	/** バックライトの強度 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightIntensity = 8000.f;
+
+	/** バックライトの色 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	FLinearColor BacklightColor = FLinearColor(1.0f, 0.85f, 0.6f);
+
+	/** バックライトの内側コーン角（度） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightInnerCone = 25.f;
+
+	/** バックライトの外側コーン角（度） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightOuterCone = 45.f;
+
+	/** バックライトの届く距離（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Backlight", meta=(EditCondition="bEnableBacklight"))
+	float BacklightAttenuation = 800.f;
 
 	// =========================================================================
 	// 移動パターン共通
@@ -243,4 +285,7 @@ private:
 
 	/** ポーズ抽選・継続管理。true を返したら movement Tick はスキップする */
 	bool TickPose(float DeltaTime);
+
+	/** バックライトをカメラの反対側に配置 */
+	void TickBacklight(float DeltaTime);
 };
