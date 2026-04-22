@@ -11,17 +11,19 @@ class USkeletalMeshComponent;
 class UAnimMontage;
 class ATomatinaProjectile;
 
-/**
- * トマトを投げてくる敵キャラ。
- *
- * 動作:
- *   1. ThrowInterval ごとに ThrowMontage を再生
- *   2. ReleaseDelay 秒後（＝振りかぶった瞬間）に HandSocketName からトマトをスポーン
- *   3. プレイヤーカメラへ向かって発射
- *
- * Anim Notify を使えるなら、ReleaseDelay を 0 にして
- * BP のモンタージュに Anim Notify を仕込み、そこから ReleaseTomato() を呼んでもよい。
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// 移動・状態
+// ─────────────────────────────────────────────────────────────────────────────
+UENUM(BlueprintType)
+enum class EThrowerState : uint8
+{
+	WalkingIn  UMETA(DisplayName="Walking In"),  // 出現位置→目的地へ歩行中
+	Active     UMETA(DisplayName="Active"),      // 目的地到着後・投擲ループ
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATomatinaThrower
+// ─────────────────────────────────────────────────────────────────────────────
 UCLASS(Blueprintable)
 class TOMATO_API ATomatinaThrower : public AActor
 {
@@ -36,72 +38,82 @@ public:
 	// =========================================================================
 	// コンポーネント
 	// =========================================================================
-
-	/** 投げるキャラのビジュアル */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Thrower")
 	USkeletalMeshComponent* MeshComp;
 
 	// =========================================================================
 	// アニメーション
 	// =========================================================================
-
-	/** 投げモーション（AnimMontage） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Animation")
 	UAnimMontage* ThrowMontage = nullptr;
 
-	/** Montage の再生レート */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Animation")
 	float ThrowMontagePlayRate = 1.0f;
 
-	/**
-	 * Montage 再生開始から、トマトが手から離れるまでの秒数（振りかぶり時間）。
-	 * 0 にすると即時発射。Anim Notify を使う場合は 0 にして、
-	 * Notify から ReleaseTomato() を呼ぶ。
-	 */
+	/** Montage 再生開始から手から離れるまでの秒数。0 にして AnimNotify から ReleaseTomato を呼ぶ運用も可 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Animation")
 	float ReleaseDelay = 0.4f;
 
-	/** トマトをスポーンさせる手のソケット名 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Animation")
 	FName HandSocketName = TEXT("HandSocket");
 
 	// =========================================================================
-	// 投擲
+	// 移動（出現〜目的地）
 	// =========================================================================
 
-	/** トマト Blueprint */
+	/** 歩行速度（cm/s） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Walk")
+	float WalkSpeed = 250.f;
+
+	/** 目的地に到着したと判定する距離（cm） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Walk")
+	float ArriveTolerance = 80.f;
+
+	/** 現在の状態（BP / AnimBP から参照可） */
+	UPROPERTY(BlueprintReadOnly, Category="Thrower|Walk")
+	EThrowerState State = EThrowerState::Active;
+
+	/** AnimBP が「歩きアニメ再生中か」判定するためのフラグ */
+	UPROPERTY(BlueprintReadOnly, Category="Thrower|Walk")
+	bool bIsWalking = false;
+
+	// =========================================================================
+	// 投擲
+	// =========================================================================
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	TSubclassOf<ATomatinaProjectile> ProjectileClass;
 
-	/** 投げる間隔（秒） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float ThrowInterval = 4.0f;
 
-	/** 投げる間隔のランダム幅（±秒） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float ThrowIntervalVariance = 1.5f;
 
-	/** 開始時の待機時間（出現直後に投げないため） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float StartDelay = 1.0f;
 
-	/** プレイヤー方向を狙うか。false ならアクターの正面方向に投げる */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
-	bool bAimAtPlayer = true;
+	/**
+	 * プレイヤーを狙う確率（0〜1）。
+	 * これ以下の Roll → プレイヤーを狙う＆体もプレイヤーへ向ける。
+	 * それ以上 → SceneryAimActors / SceneryAimLocations から狙いを選ぶ。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float AimAtPlayerChance = 0.4f;
 
-	/** プレイヤーを向く回転を発射時に揃えるか */
+	/** プレイヤー以外の狙い候補（街・他キャラ等のアクター） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
-	bool bRotateToPlayerOnThrow = true;
+	TArray<AActor*> SceneryAimActors;
 
-	/** Straight 軌道の確率 */
+	/** プレイヤー以外の狙い候補（ワールド座標） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
+	TArray<FVector> SceneryAimLocations;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float StraightChance = 0.4f;
 
-	/** Arc 軌道の確率 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float ArcChance = 0.35f;
 
-	/** Curve 軌道の確率 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw")
 	float CurveChance = 0.25f;
 
@@ -109,23 +121,40 @@ public:
 	// API
 	// =========================================================================
 
-	/** 投げモーションを開始する。ReleaseDelay 後に ReleaseTomato が呼ばれる */
+	/** Spawner から呼ばれる。歩行モードに入れて目的地を設定 */
+	UFUNCTION(BlueprintCallable, Category="Thrower")
+	void BeginWalkIn(FVector Destination);
+
 	UFUNCTION(BlueprintCallable, Category="Thrower")
 	void StartThrow();
 
-	/** トマトを実際に発射する。Anim Notify からも直接呼べる */
 	UFUNCTION(BlueprintCallable, Category="Thrower")
 	void ReleaseTomato();
 
+	/** AnimBP / BP 用フック（歩行→停止時） */
+	UFUNCTION(BlueprintImplementableEvent, Category="Thrower")
+	void OnArrivedAtDestination();
+
+	/** AnimBP / BP 用フック（投擲モーション開始時） */
+	UFUNCTION(BlueprintImplementableEvent, Category="Thrower")
+	void OnThrowStarted();
+
 private:
 	float ThrowTimer        = 0.f;
-	float ReleaseTimer      = -1.f;  // -1 = 待機中、0 以上 = 振りかぶり中
+	float ReleaseTimer      = -1.f;
 	bool  bStartDelayActive = true;
 	float StartDelayTimer   = 0.f;
 
-	/** 軌道を確率で 1 つ選ぶ */
-	ETomatoTrajectory PickTrajectory() const;
+	FVector WalkDestination = FVector::ZeroVector;
+	bool    bHasDestination = false;
 
-	/** プレイヤーポーンの位置を取得（取れなければ前方 1500cm） */
-	FVector GetAimTargetLocation() const;
+	/** 直近の投擲がプレイヤー狙いだったか（ReleaseTomato の発射方向に使う） */
+	FVector PendingAimLocation = FVector::ZeroVector;
+
+	ETomatoTrajectory PickTrajectory() const;
+	FVector PickAimLocation();
+	FVector GetPlayerLocation() const;
+
+	void TickWalk(float DeltaTime);
+	void TickActive(float DeltaTime);
 };
