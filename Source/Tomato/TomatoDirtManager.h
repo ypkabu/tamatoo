@@ -33,6 +33,10 @@ struct FDirtSplat
 	/** アクティブフラグ（false になると削除対象） */
 	UPROPERTY(BlueprintReadWrite, Category="Dirt")
 	bool bActive = true;
+
+	/** HUD の DirtTextures 配列から参照する画像 index。範囲外なら DirtTexture にフォールバック */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	int32 TextureIndex = 0;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +80,18 @@ public:
 	/** AddDirt の Size 上限（暴走防止のセーフティクランプ。0 以下で無効） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	float MaxDirtSize = 0.6f;
+
+	/** 汚れが出現する正規化範囲の最小値（メイン画面内の左上、0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="0.0", ClampMax="1.0"))
+	FVector2D SpawnRangeMin = FVector2D(0.0f, 0.0f);
+
+	/** 汚れが出現する正規化範囲の最大値（メイン画面内の右下、0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="0.0", ClampMax="1.0"))
+	FVector2D SpawnRangeMax = FVector2D(1.0f, 1.0f);
+
+	/** 汚れ画像のバリエーション数（HUD の DirtTextures 配列サイズに合わせる）。1 以下なら DirtTexture を使う */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="1"))
+	int32 NumDirtVariants = 1;
 
 	// =========================================================================
 	// 操作関数
