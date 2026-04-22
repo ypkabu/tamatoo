@@ -177,6 +177,50 @@ void ATomatinaHUD::HideCursor()
 }
 
 // =============================================================================
+// UpdateTowelPosition — DirtOverlay 内の IMG_Towel をメイン画面のピクセル座標に動かす
+// 入力 Pos: 正規化座標 (0〜1)
+// =============================================================================
+void ATomatinaHUD::UpdateTowelPosition(FVector2D Pos)
+{
+	if (!DirtOverlayWidget) { return; }
+
+	UImage* Towel = Cast<UImage>(DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_Towel")));
+	if (!Towel) { return; }
+
+	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Towel->Slot);
+	if (!Slot) { return; }
+
+	// 正規化 → メイン画面ピクセル
+	const float MainX = Pos.X * MainWidth;
+	const float MainY = Pos.Y * MainHeight;
+
+	// タオル画像の中心をその座標に合わせる
+	const FVector2D Size = Slot->GetSize();
+	Slot->SetPosition(FVector2D(MainX - Size.X * 0.5f, MainY - Size.Y * 0.5f));
+}
+
+// =============================================================================
+// ShowTowel / HideTowel — IMG_Towel の表示切替
+// =============================================================================
+void ATomatinaHUD::ShowTowel()
+{
+	if (!DirtOverlayWidget) { return; }
+	if (UImage* Towel = Cast<UImage>(DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_Towel"))))
+	{
+		Towel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
+void ATomatinaHUD::HideTowel()
+{
+	if (!DirtOverlayWidget) { return; }
+	if (UImage* Towel = Cast<UImage>(DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_Towel"))))
+	{
+		Towel->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+// =============================================================================
 // ShowResult — 撮影後の結果（WBP_PhotoResult）
 // IMG_Photo の上にある SplatContainer に撮影時の汚れを同じ正規化座標で重ねる
 // =============================================================================
