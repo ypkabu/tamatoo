@@ -202,10 +202,23 @@ void ATomatoDirtManager::ClearDirtAt(FVector2D NormPos, float Radius)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+float ATomatoDirtManager::GetSecondsSinceLastWipe() const
+{
+	const float Now = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
+	return Now - LastWipeRealTime;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amount)
 {
 	bool bAnyChanged = false;
 	const float NowRealTime = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
+
+	// 2P 活動時刻を更新 (GameMode の 1P 撮影シンクロ率判定で使う)
+	if (Amount > 0.f)
+	{
+		LastWipeRealTime = NowRealTime;
+	}
 
 	for (FDirtSplat& Dirt : DirtSplats)
 	{

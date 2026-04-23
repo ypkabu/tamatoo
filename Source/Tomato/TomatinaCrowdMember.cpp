@@ -27,11 +27,29 @@ void ATomatinaCrowdMember::BeginPlay()
 	// バラけ用：開始時に少しランダム待機
 	StartJitterTimer = FMath::FRandRange(0.f, MaxStartJitter);
 
-	// 最初は徘徊
-	WanderTarget     = PickRandomPointInArea();
+	// 左右ペーシングモードでは現在位置より遠い端を最初のターゲットにすると自然
+	if (bMoveLeftRightOnly)
+	{
+		const FVector Cur = GetActorLocation();
+		if (bLeftRightUsesYAxis)
+		{
+			bPacingHeadingPositive = (Cur.Y <= AreaCenter.Y);
+		}
+		else
+		{
+			bPacingHeadingPositive = (Cur.X <= AreaCenter.X);
+		}
+		WanderTarget = PickNextPacingTarget();
+	}
+	else
+	{
+		WanderTarget = PickRandomPointInArea();
+	}
+
 	CurrentAction    = ECrowdAction::Wander;
 	CurrentSpeed     = WanderSpeed;
 	ActionCheckTimer = ActionCheckInterval + FMath::FRandRange(-ActionCheckVariance, ActionCheckVariance);
+	bIsMoving        = true;
 
 	OnEnterWander();
 }
@@ -50,37 +68,41 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 		return;
 	}
 
-	// ── 状態継続管理（Burst / Cheer）─────────────────────────
-	if (CurrentAction == ECrowdAction::Burst || CurrentAction == ECrowdAction::Cheer)
+	// 左右ペーシングモードでは Burst/Cheer 抽選を完全に無効化。
+	// ランダム要素ゼロで端から端を往復するだけ。
+	if (!bMoveLeftRightOnly)
 	{
-		ActionTimer -= DeltaTime;
-		if (ActionTimer <= 0.f)
+		// ── 状態継続管理（Burst / Cheer）─────────────────────────
+		if (CurrentAction == ECrowdAction::Burst || CurrentAction == ECrowdAction::Cheer)
 		{
-			EnterAction(ECrowdAction::Wander);
+			ActionTimer -= DeltaTime;
+			if (ActionTimer <= 0.f)
+			{
+				EnterAction(ECrowdAction::Wander);
+			}
 		}
-	}
 
-	// ── 徘徊中の行動切替抽選 ────────────────────────────────
-	if (CurrentAction == ECrowdAction::Wander)
-	{
-		ActionCheckTimer -= DeltaTime;
-		if (ActionCheckTimer <= 0.f)
+		// ── 徘徊中の行動切替抽選 ────────────────────────────────
+		if (CurrentAction == ECrowdAction::Wander)
 		{
-			ActionCheckTimer = ActionCheckInterval + FMath::FRandRange(-ActionCheckVariance, ActionCheckVariance);
+			ActionCheckTimer -= DeltaTime;
+			if (ActionCheckTimer <= 0.f)
+			{
+				ActionCheckTimer = ActionCheckInterval + FMath::FRandRange(-ActionCheckVariance, ActionCheckVariance);
 
-			const float Roll = FMath::FRand();
-			if (Roll < BurstChance)
-			{
-				EnterAction(ECrowdAction::Burst);
-			}
-			else if (Roll < BurstChance + CheerChance)
-			{
-				EnterAction(ECrowdAction::Cheer);
-			}
-			// else: 何もしない（Wander 継続・Wander Target だけ更新）
-			else
-			{
-				WanderTarget = PickRandomPointInArea();
+				const float Roll = FMath::FRand();
+				if (Roll < BurstChance)
+				{
+					EnterAction(ECrowdAction::Burst);
+				}
+				else if (Roll < BurstChance + CheerChance)
+				{
+					EnterAction(ECrowdAction::Cheer);
+				}
+				else
+				{
+					WanderTarget = PickRandomPointInArea();
+				}
 			}
 		}
 	}
@@ -143,16 +165,32 @@ void ATomatinaCrowdMember::TickMovement(float DeltaTime)
 
 	if (DistSqr <= ArriveTolerance * ArriveTolerance)
 	{
-		// 到着 → 次の点を選ぶ（Burst 中なら継続）
-		WanderTarget = PickRandomPointInArea();
+		// 到着 → 次の点を選ぶ
+		if (bMoveLeftRightOnly)
+		{
+			// 反対側の端に切り替え (完全ペーシング)
+			bPacingHeadingPositive = !bPacingHeadingPositive;
+			WanderTarget = PickNextPacingTarget();
+		}
+		else
+		{
+			WanderTarget = PickRandomPointInArea();
+		}
 		return;
 	}
 
 	FVector Dir = ToDest.GetSafeNormal2D();
 	if (Dir.IsNearlyZero()) { return; }
 
-	// Burst 中はランダムジッターを加えて荒っぽく見せる
-	if (CurrentAction == ECrowdAction::Burst && BurstJitter > 0.f)
+	// 左右ペーシングモードでは Burst ジッターを完全に無効化。軸を固定するだけ。
+	if (bMoveLeftRightOnly)
+	{
+		if (bLeftRightUsesYAxis) { Dir.X = 0.f; }
+		else                     { Dir.Y = 0.f; }
+		Dir = Dir.GetSafeNormal2D();
+		if (Dir.IsNearlyZero()) { return; }
+	}
+	else if (CurrentAction == ECrowdAction::Burst && BurstJitter > 0.f)
 	{
 		const FVector Jitter = FMath::VRand() * BurstJitter;
 		Dir = (Dir + Jitter * 0.01f).GetSafeNormal2D();
@@ -171,11 +209,38 @@ void ATomatinaCrowdMember::TickMovement(float DeltaTime)
 // PickRandomPointInArea
 // =============================================================================
 
-FVector ATomatinaCrowdMember::PickRandomPointInArea() const
+FVector ATomatinaCrowdMember::PickRandomPointInArea()
 {
+	// 左右ペーシングモードの呼び出しは PickNextPacingTarget に委譲
+	if (bMoveLeftRightOnly)
+	{
+		return PickNextPacingTarget();
+	}
+
 	const float X = AreaCenter.X + FMath::FRandRange(-AreaExtent.X, AreaExtent.X);
 	const float Y = AreaCenter.Y + FMath::FRandRange(-AreaExtent.Y, AreaExtent.Y);
 	return FVector(X, Y, AreaCenter.Z);
+}
+
+// =============================================================================
+// PickNextPacingTarget — 左右ペーシング用。bPacingHeadingPositive 方向の端を返す
+// =============================================================================
+
+FVector ATomatinaCrowdMember::PickNextPacingTarget()
+{
+	const FVector Cur = GetActorLocation();
+	const float Sign = bPacingHeadingPositive ? 1.f : -1.f;
+
+	if (bLeftRightUsesYAxis)
+	{
+		const float TargetY = AreaCenter.Y + Sign * AreaExtent.Y;
+		return FVector(Cur.X, TargetY, AreaCenter.Z);
+	}
+	else
+	{
+		const float TargetX = AreaCenter.X + Sign * AreaExtent.X;
+		return FVector(TargetX, Cur.Y, AreaCenter.Z);
+	}
 }
 
 // =============================================================================
@@ -184,7 +249,25 @@ FVector ATomatinaCrowdMember::PickRandomPointInArea() const
 
 void ATomatinaCrowdMember::InitializeFromManager(FVector Center, FVector Extent)
 {
-	AreaCenter   = Center;
-	AreaExtent   = Extent;
-	WanderTarget = PickRandomPointInArea();
+	AreaCenter = Center;
+	AreaExtent = Extent;
+
+	if (bMoveLeftRightOnly)
+	{
+		// スポーン位置から遠い端をまず目指す
+		const FVector Cur = GetActorLocation();
+		if (bLeftRightUsesYAxis)
+		{
+			bPacingHeadingPositive = (Cur.Y <= AreaCenter.Y);
+		}
+		else
+		{
+			bPacingHeadingPositive = (Cur.X <= AreaCenter.X);
+		}
+		WanderTarget = PickNextPacingTarget();
+	}
+	else
+	{
+		WanderTarget = PickRandomPointInArea();
+	}
 }

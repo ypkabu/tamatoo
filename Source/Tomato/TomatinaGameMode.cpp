@@ -319,6 +319,22 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	UE_LOG(LogTemp, Warning, TEXT("TakePhoto: Score=%d Total=%d Dirts=%d"),
 		Score, TotalScore, ActiveDirts.Num());
 
+	// ── リザルト統計サンプリング ─────────────────────────────────
+	// 撮影時点のスタイリッシュランクを平均集計、2P 直近活動があったかで同期集計。
+	{
+		StylishRankSum += static_cast<float>(StylishRank);
+		StylishRankSampleCount++;
+		TotalPhotoAttempts++;
+
+		if (ATomatoDirtManager* Mgr = GetDirtManager())
+		{
+			if (Mgr->GetSecondsSinceLastWipe() <= SyncWindowSeconds)
+			{
+				SyncPhotoCount++;
+			}
+		}
+	}
+
 	// ④ 撮影成功なら BestTarget を Spawner から除去
 	if (Score > 0 && TargetSpawner && Result.BestTarget)
 	{
@@ -353,11 +369,28 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 // =============================================================================
 void ATomatinaGameMode::ShowFinalResult()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::ShowFinalResult Total=%d"), TotalScore);
+	// 平均スタイリッシュランクを集計値から決定 (float 平均を enum にスナップ)
+	const float AvgRankF = (StylishRankSampleCount > 0)
+		? StylishRankSum / StylishRankSampleCount
+		: 0.f;
+	const int32 RankIdx = FMath::Clamp(FMath::RoundToInt(AvgRankF), 0,
+		static_cast<int32>(EStylishRank::SSS));
+	const EStylishRank AvgRank = static_cast<EStylishRank>(RankIdx);
+	const FString AvgRankStr   = GetStylishRankName(AvgRank).ToString();
+
+	// 1P-2P シンクロ率 (0.0〜1.0)
+	const float SyncRate = (TotalPhotoAttempts > 0)
+		? static_cast<float>(SyncPhotoCount) / TotalPhotoAttempts
+		: 0.f;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::ShowFinalResult Total=%d AvgRank=%s (%.2f) Sync=%.1f%% (%d/%d)"),
+		TotalScore, *AvgRankStr, AvgRankF, SyncRate * 100.f,
+		SyncPhotoCount, TotalPhotoAttempts);
 
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
-		HUD->ShowFinalResult(TotalScore, Missions.Num());
+		HUD->ShowFinalResult(TotalScore, Missions.Num(), AvgRankStr, SyncRate);
 	}
 }
 

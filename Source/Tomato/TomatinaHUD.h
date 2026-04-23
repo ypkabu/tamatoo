@@ -184,7 +184,8 @@ public:
 	void HideMissionResult();
 
 	UFUNCTION(BlueprintCallable, Category="HUD|Result")
-	void ShowFinalResult(int32 InTotalScore, int32 MissionCount);
+	void ShowFinalResult(int32 InTotalScore, int32 MissionCount,
+		const FString& AverageStylishRank = TEXT("C"), float SyncRate01 = 0.f);
 
 	// =========================================================================
 	// ミッション表示

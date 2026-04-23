@@ -254,4 +254,27 @@ private:
 	ATomatoDirtManager* CachedDirtManager = nullptr;
 
 	float LastHighScoreShotTime = -1000.f;
+
+	// =========================================================================
+	// リザルト統計 (最終結果画面に表示する「平均アクションランク」と「1P2P シンクロ率」)
+	// =========================================================================
+
+	/** 撮影時点のスタイリッシュランクの累計 (float 集計 → 平均) */
+	float StylishRankSum = 0.f;
+
+	/** 撮影ごとのサンプル数 */
+	int32 StylishRankSampleCount = 0;
+
+	/** 撮影試行の総数 (シンクロ率の分母) */
+	int32 TotalPhotoAttempts = 0;
+
+	/** 1P 撮影時に 2P が直近で活動していた回数 (シンクロ率の分子) */
+	int32 SyncPhotoCount = 0;
+
+public:
+	/** シンクロ判定の猶予時間 (秒)。撮影時刻から過去これだけの間に 2P が拭いていれば同期扱い */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stats")
+	float SyncWindowSeconds = 2.0f;
+
+private:
 };
