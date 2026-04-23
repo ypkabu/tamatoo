@@ -56,6 +56,13 @@ void ATomatinaGameMode::BeginPlay()
 	// 画面サイズを PlayerPawn から取得
 	CachePlayerPawnSizes();
 
+	// スタイリッシュ初期化
+	StylishGauge = 0.f;
+	StylishRank = EStylishRank::C;
+	StylishComboCount = 0;
+	DirtCoverage01 = 0.f;
+	LastHighScoreShotTime = -1000.f;
+
 	// BGM 再生
 	if (BGM)
 	{
@@ -73,6 +80,7 @@ void ATomatinaGameMode::BeginPlay()
 	{
 		HUD->ShowCountdown(3);
 	}
+	PushStylishStateToHUD();
 
 	UE_LOG(LogTemp, Warning,
 		TEXT("ATomatinaGameMode::BeginPlay: カウントダウン開始 Missions=%d"),
@@ -157,6 +165,8 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 	}
 
 	// ── ミッション残り時間 ──────────────────────────────
+	UpdateStylishGauge(RealDelta);
+
 	if (RemainingTime > 0.f)
 	{
 		RemainingTime -= DeltaSeconds; // 通常再生中なので DeltaSeconds で OK
@@ -205,6 +215,7 @@ void ATomatinaGameMode::StartMission(int32 Index)
 	{
 		HUD->ShowMissionDisplay(Mission.DisplayText, Mission.TargetImage);
 	}
+	PushStylishStateToHUD();
 
 	if (TargetSpawner)
 	{
@@ -283,6 +294,25 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		}
 	}
 
+	// ③'' 高ランク時の被写体ボーナス（隠し要素）
+	const bool bWasHighRank = (static_cast<uint8>(StylishRank) >= static_cast<uint8>(HiddenActionMinRank));
+	if (Score > 0 && Result.BestTarget && bWasHighRank && Result.BestTarget->HighRankBonusScore != 0)
+	{
+		const int32 Before = Score;
+		Score = FMath::Max(0, Score + Result.BestTarget->HighRankBonusScore);
+		Comment += FString::Printf(TEXT(" 高ランク被写体ボーナス %+d"), Score - Before);
+	}
+
+	// ③''' スタイリッシュゲージ更新（高得点をテンポ良く重ねるとランクアップ）
+	AddStylishGaugeFromShot(Score);
+
+	const bool bIsHighRankNow = (static_cast<uint8>(StylishRank) >= static_cast<uint8>(HiddenActionMinRank));
+	if (Score > 0 && Result.BestTarget && bIsHighRankNow)
+	{
+		Result.BestTarget->OnHighRankShot(GetStylishRankName(StylishRank), Score);
+		OnHighStylishShot(Result.BestTarget, StylishRank, Score);
+	}
+
 	CurrentScore = Score;
 	TotalScore  += Score;
 
@@ -315,6 +345,7 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		HUD->ShowResult(Score, Comment, ActiveDirts);
 		HUD->UpdateTotalScore(TotalScore);
 	}
+	PushStylishStateToHUD();
 }
 
 // =============================================================================
@@ -395,5 +426,234 @@ void ATomatinaGameMode::CachePlayerPawnSizes()
 					MainWidth, MainHeight, PhoneWidth, PhoneHeight);
 			}
 		}
+	}
+}
+
+// =============================================================================
+// GetDirtManager
+// =============================================================================
+ATomatoDirtManager* ATomatinaGameMode::GetDirtManager()
+{
+	if (CachedDirtManager && IsValid(CachedDirtManager))
+	{
+		return CachedDirtManager;
+	}
+
+	if (!GetWorld())
+	{
+		return nullptr;
+	}
+
+	if (AActor* DirtActor = UGameplayStatics::GetActorOfClass(GetWorld(), ATomatoDirtManager::StaticClass()))
+	{
+		CachedDirtManager = Cast<ATomatoDirtManager>(DirtActor);
+	}
+
+	return CachedDirtManager;
+}
+
+// =============================================================================
+// CalculateDirtCoverage01
+// 汚れ占有率を 0〜1 で近似。高値なら「画面が塞がれている」扱い。
+// =============================================================================
+float ATomatinaGameMode::CalculateDirtCoverage01()
+{
+	ATomatoDirtManager* DirtMgr = GetDirtManager();
+	if (!DirtMgr)
+	{
+		return 0.f;
+	}
+
+	const TArray<FDirtSplat> Dirts = DirtMgr->GetActiveDirts();
+	if (Dirts.Num() == 0)
+	{
+		return 0.f;
+	}
+
+	const int32 GridX = 32;
+	const int32 GridY = 20;
+	TArray<uint8> Occupancy;
+	Occupancy.Init(0, GridX * GridY);
+
+	const float Aspect = (MainHeight > KINDA_SMALL_NUMBER) ? (MainWidth / MainHeight) : 1.6f;
+
+	for (const FDirtSplat& Dirt : Dirts)
+	{
+		if (!Dirt.bActive || Dirt.Opacity <= 0.f) { continue; }
+
+		const float RadiusX = FMath::Max(0.01f, Dirt.Size * 0.5f);
+		const float RadiusY = RadiusX * Aspect;
+		const float CX = FMath::Clamp(Dirt.NormalizedPosition.X, 0.f, 1.f);
+		const float CY = FMath::Clamp(Dirt.NormalizedPosition.Y, 0.f, 1.f);
+
+		for (int32 Y = 0; Y < GridY; ++Y)
+		{
+			const float SampleY = (static_cast<float>(Y) + 0.5f) / static_cast<float>(GridY);
+			for (int32 X = 0; X < GridX; ++X)
+			{
+				const float SampleX = (static_cast<float>(X) + 0.5f) / static_cast<float>(GridX);
+				const float NX = (SampleX - CX) / RadiusX;
+				const float NY = (SampleY - CY) / RadiusY;
+				if ((NX * NX + NY * NY) <= 1.0f)
+				{
+					Occupancy[Y * GridX + X] = 1;
+				}
+			}
+		}
+	}
+
+	int32 Filled = 0;
+	for (uint8 Cell : Occupancy)
+	{
+		Filled += (Cell != 0) ? 1 : 0;
+	}
+
+	return static_cast<float>(Filled) / static_cast<float>(GridX * GridY);
+}
+
+// =============================================================================
+// UpdateStylishGauge
+// =============================================================================
+void ATomatinaGameMode::UpdateStylishGauge(float RealDelta)
+{
+	if (RealDelta <= 0.f)
+	{
+		return;
+	}
+
+	DirtCoverage01 = CalculateDirtCoverage01();
+
+	float DecayPerSecond = StylishBaseDecayPerSecond;
+	if (DirtCoverage01 >= StylishDirtCriticalThreshold)
+	{
+		DecayPerSecond += StylishDirtCriticalDecayPerSecond;
+	}
+	else if (DirtCoverage01 >= StylishDirtDangerThreshold)
+	{
+		DecayPerSecond += StylishDirtDangerDecayPerSecond;
+	}
+
+	StylishGauge = FMath::Clamp(StylishGauge - DecayPerSecond * RealDelta, 0.f, StylishGaugeMax);
+	if (StylishGauge <= KINDA_SMALL_NUMBER)
+	{
+		StylishComboCount = 0;
+	}
+
+	ApplyStylishRankFromGauge();
+	PushStylishStateToHUD();
+}
+
+// =============================================================================
+// AddStylishGaugeFromShot
+// =============================================================================
+void ATomatinaGameMode::AddStylishGaugeFromShot(int32 ShotScore)
+{
+	if (ShotScore <= 0)
+	{
+		StylishGauge = FMath::Clamp(StylishGauge - StylishMissPenalty, 0.f, StylishGaugeMax);
+		if (bResetComboOnMiss)
+		{
+			StylishComboCount = 0;
+		}
+		ApplyStylishRankFromGauge();
+		PushStylishStateToHUD();
+		return;
+	}
+
+	const bool bGoodShot = (ShotScore >= StylishGoodShotThreshold);
+	const float NowRealTime = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
+
+	float GaugeGain = static_cast<float>(ShotScore) * StylishScoreToGaugeScale;
+	if (bGoodShot)
+	{
+		const bool bInTempo = ((NowRealTime - LastHighScoreShotTime) <= StylishTempoWindow);
+		if (bInTempo && StylishComboCount > 0)
+		{
+			GaugeGain += StylishTempoBonusGauge;
+			++StylishComboCount;
+		}
+		else
+		{
+			StylishComboCount = 1;
+		}
+		LastHighScoreShotTime = NowRealTime;
+	}
+	else
+	{
+		StylishComboCount = 0;
+	}
+
+	StylishGauge = FMath::Clamp(StylishGauge + GaugeGain, 0.f, StylishGaugeMax);
+	ApplyStylishRankFromGauge();
+	PushStylishStateToHUD();
+}
+
+// =============================================================================
+// ApplyStylishRankFromGauge
+// =============================================================================
+void ATomatinaGameMode::ApplyStylishRankFromGauge()
+{
+	const EStylishRank OldRank = StylishRank;
+
+	if (StylishGauge >= StylishThresholdSSS)      { StylishRank = EStylishRank::SSS; }
+	else if (StylishGauge >= StylishThresholdS)   { StylishRank = EStylishRank::S;   }
+	else if (StylishGauge >= StylishThresholdA)   { StylishRank = EStylishRank::A;   }
+	else if (StylishGauge >= StylishThresholdB)   { StylishRank = EStylishRank::B;   }
+	else                                          { StylishRank = EStylishRank::C;   }
+
+	if (StylishRank != OldRank)
+	{
+		const bool bRankUp = (static_cast<uint8>(StylishRank) > static_cast<uint8>(OldRank));
+		OnStylishRankChanged(StylishRank, OldRank, bRankUp);
+
+		if (TargetSpawner)
+		{
+			const FName RankName = GetStylishRankName(StylishRank);
+			const bool bHighRank = (static_cast<uint8>(StylishRank) >= static_cast<uint8>(HiddenActionMinRank));
+			for (ATomatinaTargetBase* Target : TargetSpawner->ActiveTargets)
+			{
+				if (IsValid(Target))
+				{
+					Target->OnStylishRankChanged(RankName, bHighRank);
+				}
+			}
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("StylishRank: %s -> %s (Gauge=%.1f)"),
+			*GetStylishRankName(OldRank).ToString(),
+			*GetStylishRankName(StylishRank).ToString(),
+			StylishGauge);
+	}
+}
+
+// =============================================================================
+// GetStylishRankName
+// =============================================================================
+FName ATomatinaGameMode::GetStylishRankName(EStylishRank Rank) const
+{
+	switch (Rank)
+	{
+	case EStylishRank::B:   return FName(TEXT("B"));
+	case EStylishRank::A:   return FName(TEXT("A"));
+	case EStylishRank::S:   return FName(TEXT("S"));
+	case EStylishRank::SSS: return FName(TEXT("SSS"));
+	case EStylishRank::C:
+	default:
+		return FName(TEXT("C"));
+	}
+}
+
+// =============================================================================
+// PushStylishStateToHUD
+// =============================================================================
+void ATomatinaGameMode::PushStylishStateToHUD()
+{
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		const float GaugePercent = (StylishGaugeMax > KINDA_SMALL_NUMBER)
+			? (StylishGauge / StylishGaugeMax)
+			: 0.f;
+		const bool bDanger = (DirtCoverage01 >= StylishDirtDangerThreshold);
+		HUD->UpdateStylishDisplay(GetStylishRankName(StylishRank).ToString(), GaugePercent, StylishComboCount, bDanger);
 	}
 }

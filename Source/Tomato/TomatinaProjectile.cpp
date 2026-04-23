@@ -185,16 +185,33 @@ void ATomatinaProjectile::OnHitCamera()
 	const FVector2D SplatPos(
 		FMath::RandRange(0.0f, 1.0f),
 		FMath::RandRange(0.0f, 1.0f));
-	const float SplatSize = FMath::RandRange(SplatSizeMin, SplatSizeMax);
+	float SplatSize = FMath::RandRange(SplatSizeMin, SplatSizeMax);
+	const ETomatoImpactVariant ImpactVariant = PickImpactVariant();
+
+	if (ImpactVariant == ETomatoImpactVariant::StickyYellow)
+	{
+		SplatSize *= StickySizeMultiplier;
+	}
 
 	if (ATomatoDirtManager* DirtMgr = GetDirtManager())
 	{
-		DirtMgr->AddDirt(SplatPos, SplatSize);
+		if (ImpactVariant == ETomatoImpactVariant::StickyYellow)
+		{
+			DirtMgr->AddDirtWithType(
+				SplatPos,
+				SplatSize,
+				EDirtType::StickyYellowDash,
+				StickyRequiredDashCount);
+		}
+		else
+		{
+			DirtMgr->AddDirt(SplatPos, SplatSize);
+		}
 	}
 
 	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaProjectile::OnHitCamera: pos=(%.2f,%.2f) size=%.3f"),
-		SplatPos.X, SplatPos.Y, SplatSize);
+		TEXT("ATomatinaProjectile::OnHitCamera: variant=%d pos=(%.2f,%.2f) size=%.3f"),
+		static_cast<int32>(ImpactVariant), SplatPos.X, SplatPos.Y, SplatSize);
 
 	// 着弾エフェクト・SE は BP 派生クラスで BlueprintNativeEvent として追加可能
 }
@@ -251,4 +268,24 @@ ATomatoDirtManager* ATomatinaProjectile::GetDirtManager()
 		}
 	}
 	return CachedDirtManager;
+}
+
+// =============================================================================
+// PickImpactVariant
+// =============================================================================
+
+ETomatoImpactVariant ATomatinaProjectile::PickImpactVariant() const
+{
+	if (!bEnableSpecialTomato)
+	{
+		return ETomatoImpactVariant::NormalRed;
+	}
+
+	const float Roll = FMath::FRand();
+	if (Roll < StickyYellowChance)
+	{
+		return ETomatoImpactVariant::StickyYellow;
+	}
+
+	return ETomatoImpactVariant::NormalRed;
 }

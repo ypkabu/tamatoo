@@ -105,10 +105,10 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
-	float PhoneWidth = 1024.f;
+	float PhoneWidth = 2256.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
-	float PhoneHeight = 768.f;
+	float PhoneHeight = 1179.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
 	bool bTestMode = true;
@@ -170,6 +170,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void UpdateTotalScore(int32 TotalScore);
+
+	// =========================================================================
+	// スタイリッシュランク表示
+	// =========================================================================
+	UFUNCTION(BlueprintCallable, Category="HUD|Stylish")
+	void UpdateStylishDisplay(const FString& RankText, float GaugePercent, int32 ComboCount, bool bDanger);
 
 	// =========================================================================
 	// カウントダウン
@@ -238,4 +244,13 @@ private:
 		float AreaHeight,
 		float OriginX,
 		float OriginY);
+
+	/** WBP_MissionDisplay に必要なスタイリッシュ UI 名称が揃っているかを確認する */
+	void ValidateMissionStylishWidgets();
+
+	/** Widget 内のズーム表示 Image に ZoomDisplayMaterial をバインドする */
+	bool BindZoomMaterialToWidget(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel);
+
+	/** iPhone 領域に合わせてズーム表示 Image の位置とサイズを強制レイアウトする */
+	void LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel);
 };

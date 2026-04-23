@@ -6,6 +6,13 @@
 #include "GameFramework/Actor.h"
 #include "TomatoDirtManager.generated.h"
 
+UENUM(BlueprintType)
+enum class EDirtType : uint8
+{
+	NormalRed        UMETA(DisplayName="Normal Red"),
+	StickyYellowDash UMETA(DisplayName="Sticky Yellow Dash x4"),
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 汚れ１つ分のデータ
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,6 +44,26 @@ struct FDirtSplat
 	/** HUD の DirtTextures 配列から参照する画像 index。範囲外なら DirtTexture にフォールバック */
 	UPROPERTY(BlueprintReadWrite, Category="Dirt")
 	int32 TextureIndex = 0;
+
+	/** 汚れタイプ（通常 / 特殊） */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	EDirtType DirtType = EDirtType::NormalRed;
+
+	/** 特殊トマト用: 必要な連続ダッシュ回数 */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	int32 RequiredDashCount = 0;
+
+	/** 特殊トマト用: 現在の連続ダッシュ回数 */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	int32 CurrentDashCount = 0;
+
+	/** 特殊トマト用: 最後にダッシュ判定が成立した時刻（RealTime 秒） */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	float LastDashTime = -1000.0f;
+
+	/** 特殊トマト用: 最後にダッシュ判定が成立した位置 */
+	UPROPERTY(BlueprintReadWrite, Category="Dirt")
+	FVector2D LastDashPos = FVector2D::ZeroVector;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +120,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="1"))
 	int32 NumDirtVariants = 1;
 
+	/** 特殊トマト（黄色）に使う TextureIndex。HUD の DirtTextures で黄色画像を割り当てること */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special")
+	int32 StickyTextureIndex = 1;
+
+	/** 特殊トマトを剥がすのに必要な連続ダッシュ回数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special", meta=(ClampMin="1"))
+	int32 StickyRequiredDashCount = 4;
+
+	/** 特殊トマト: ダッシュとして認める最小 Amount（WipeDirtAt の第3引数。BP で DeltaSeconds 掛け運用を想定） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special", meta=(ClampMin="0.01"))
+	float StickyDashMinAmount = 0.03f;
+
+	/** 特殊トマト: ダッシュとして認める最小移動距離（正規化） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special", meta=(ClampMin="0.001"))
+	float StickyDashMinMoveDistance = 0.06f;
+
+	/** 特殊トマト: 連続扱いになる最大間隔（秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special", meta=(ClampMin="0.01"))
+	float StickyDashMaxInterval = 0.28f;
+
+	/** 特殊トマト: 途中段階での最小不透明度（進捗の視覚化用） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Special", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float StickyProgressMinOpacity = 0.35f;
+
 	// =========================================================================
 	// 操作関数
 	// =========================================================================
@@ -112,6 +163,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Dirt")
 	void AddDirt(FVector2D NormPos, float Size);
+
+	/** タイプ指定で汚れを追加する（特殊トマト用）。TextureIndex を -1 にすると自動選択。 */
+	UFUNCTION(BlueprintCallable, Category="Dirt")
+	void AddDirtWithType(FVector2D NormPos, float Size, EDirtType DirtType, int32 InRequiredDashCount = 0, int32 InTextureIndex = -1);
 
 	/**
 	 * 指定座標の半径 Radius 以内にある汚れの Opacity を 0 にする。
