@@ -49,10 +49,10 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
-	float PhoneWidth = 1024.f;
+	float PhoneWidth = 2256.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
-	float PhoneHeight = 768.f;
+	float PhoneHeight = 1179.f;
 
 	// ──────────────────────────────────────────────
 	// テストモード（iPhone なしで PiP 動作確認）

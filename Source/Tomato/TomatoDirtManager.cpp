@@ -99,11 +99,17 @@ void ATomatoDirtManager::SpawnDirt()
 // ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 {
+	AddDirtWithType(NormPos, Size, EDirtType::NormalRed);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+void ATomatoDirtManager::AddDirtWithType(FVector2D NormPos, float Size, EDirtType InDirtType, int32 InRequiredDashCount, int32 InTextureIndex)
+{
 	// MaxDirts に達していたら追加しない（既存の汚れは消さない）
 	if (DirtSplats.Num() >= MaxDirts)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatoDirtManager::AddDirt: MaxDirts(%d) に達しているため追加スキップ"),
+			TEXT("ATomatoDirtManager::AddDirtWithType: MaxDirts(%d) に達しているため追加スキップ"),
 			MaxDirts);
 		return;
 	}
@@ -128,18 +134,42 @@ void ATomatoDirtManager::AddDirt(FVector2D NormPos, float Size)
 		FMath::Clamp(NormPos.X, RangeMinX, RangeMaxX),
 		FMath::Clamp(NormPos.Y, RangeMinY, RangeMaxY));
 
+	const bool bIsSticky = (InDirtType == EDirtType::StickyYellowDash);
+	int32 TextureIndex = 0;
+	if (InTextureIndex >= 0)
+	{
+		TextureIndex = InTextureIndex;
+	}
+	else if (bIsSticky)
+	{
+		TextureIndex = StickyTextureIndex;
+	}
+	else
+	{
+		TextureIndex = (NumDirtVariants > 1) ? FMath::RandRange(0, NumDirtVariants - 1) : 0;
+	}
+
 	FDirtSplat NewDirt;
 	NewDirt.NormalizedPosition = ClampedPos;
 	NewDirt.Size               = SafeSize;
 	NewDirt.Opacity            = 1.0f;
 	NewDirt.FadeSpeed          = 0.0f;
 	NewDirt.bActive            = true;
-	NewDirt.TextureIndex       = (NumDirtVariants > 1) ? FMath::RandRange(0, NumDirtVariants - 1) : 0;
+	NewDirt.TextureIndex       = TextureIndex;
+	NewDirt.DirtType           = InDirtType;
+	NewDirt.RequiredDashCount  = bIsSticky
+		? FMath::Max(1, (InRequiredDashCount > 0) ? InRequiredDashCount : StickyRequiredDashCount)
+		: 0;
+	NewDirt.CurrentDashCount   = 0;
+	NewDirt.LastDashTime       = -1000.0f;
+	NewDirt.LastDashPos        = ClampedPos;
 
 	DirtSplats.Add(NewDirt);
 
-	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::AddDirt: pos=(%.2f,%.2f) size=%.3f tex=%d 合計=%d"),
-		NormPos.X, NormPos.Y, SafeSize, NewDirt.TextureIndex, DirtSplats.Num());
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatoDirtManager::AddDirtWithType: type=%d pos=(%.2f,%.2f) size=%.3f tex=%d reqDash=%d 合計=%d"),
+		static_cast<int32>(InDirtType), NormPos.X, NormPos.Y, SafeSize,
+		NewDirt.TextureIndex, NewDirt.RequiredDashCount, DirtSplats.Num());
 
 	NotifyHUD();
 }
@@ -175,6 +205,7 @@ void ATomatoDirtManager::ClearDirtAt(FVector2D NormPos, float Radius)
 void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amount)
 {
 	bool bAnyChanged = false;
+	const float NowRealTime = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.f;
 
 	for (FDirtSplat& Dirt : DirtSplats)
 	{
@@ -185,15 +216,61 @@ void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amoun
 
 		if (Dist <= EffectRange)
 		{
-			bAnyChanged = true;
-			// 中心ほど効果大（距離に応じたフォールオフ）
-			const float Falloff = 1.0f - (Dist / EffectRange);
-			Dirt.Opacity -= Amount * Falloff;
-			if (Dirt.Opacity <= 0.0f)
+			if (Dirt.DirtType == EDirtType::StickyYellowDash)
 			{
-				Dirt.Opacity = 0.0f;
-				Dirt.bActive = false;
+				const bool bFastEnough = (Amount >= StickyDashMinAmount);
+				const float MoveDist = FVector2D::Distance(NormPos, Dirt.LastDashPos);
+				const bool bMovedEnough = (MoveDist >= StickyDashMinMoveDistance);
+
+				if (bFastEnough && bMovedEnough)
+				{
+					const bool bChain = ((NowRealTime - Dirt.LastDashTime) <= StickyDashMaxInterval);
+					Dirt.CurrentDashCount = bChain ? (Dirt.CurrentDashCount + 1) : 1;
+					Dirt.LastDashTime = NowRealTime;
+					Dirt.LastDashPos  = NormPos;
+					bAnyChanged = true;
+
+					const int32 NeedDashCount = FMath::Max(1, Dirt.RequiredDashCount);
+					if (Dirt.CurrentDashCount >= NeedDashCount)
+					{
+						Dirt.Opacity = 0.0f;
+						Dirt.bActive = false;
+					}
+					else
+					{
+						const float Progress = static_cast<float>(Dirt.CurrentDashCount) / static_cast<float>(NeedDashCount);
+						Dirt.Opacity = FMath::Lerp(1.0f, StickyProgressMinOpacity, FMath::Clamp(Progress, 0.f, 1.f));
+					}
+				}
+				else if (Dirt.CurrentDashCount > 0 && (NowRealTime - Dirt.LastDashTime) > StickyDashMaxInterval)
+				{
+					// テンポが切れたら連続回数をリセット
+					Dirt.CurrentDashCount = 0;
+					Dirt.Opacity = 1.0f;
+					bAnyChanged = true;
+				}
 			}
+			else
+			{
+				bAnyChanged = true;
+				// 中心ほど効果大（距離に応じたフォールオフ）
+				const float Falloff = 1.0f - (Dist / EffectRange);
+				Dirt.Opacity -= Amount * Falloff;
+				if (Dirt.Opacity <= 0.0f)
+				{
+					Dirt.Opacity = 0.0f;
+					Dirt.bActive = false;
+				}
+			}
+		}
+		else if (Dirt.DirtType == EDirtType::StickyYellowDash
+			&& Dirt.CurrentDashCount > 0
+			&& (NowRealTime - Dirt.LastDashTime) > StickyDashMaxInterval)
+		{
+			// 離れている間にテンポ切れした場合もリセット
+			Dirt.CurrentDashCount = 0;
+			Dirt.Opacity = 1.0f;
+			bAnyChanged = true;
 		}
 	}
 
