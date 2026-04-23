@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Unblock-File *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" -projectfiles -project=\"C:\\\\Users\\\\zhush\\\\Documents\\\\Unreal Projects\\\\tamatoo\\\\Tomato.uproject\" -game -rocket -progress 2>&1 | Select-Object -Last 40)",
+      "PowerShell(Get-ItemProperty *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" -projectfiles -project=\"C:\\\\Users\\\\zhush\\\\Documents\\\\Unreal Projects\\\\tamatoo\\\\Tomato.uproject\" -game -rocket -progress 2>&1 | Select-Object -Last 30)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" TomatoEditor Win64 Development -Project=\"C:\\\\Users\\\\zhush\\\\Documents\\\\Unreal Projects\\\\tamatoo\\\\Tomato.uproject\" -WaitMutex -FromMsBuild 2>&1 | Select-Object -Last 60)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" TomatoEditor Win64 Development -Project=\"C:\\\\Users\\\\zhush\\\\Documents\\\\Unreal Projects\\\\tamatoo\\\\Tomato.uproject\" -WaitMutex -FromMsBuild 2>&1 | Select-Object -Last 40)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" TomatoEditor Win64 Development -Project=\"C:\\\\Users\\\\zhush\\\\Documents\\\\Unreal Projects\\\\tamatoo\\\\Tomato.uproject\" -WaitMutex -FromMsBuild 2>&1 | Select-Object -Last 20)"
+    ]
+  }
+}

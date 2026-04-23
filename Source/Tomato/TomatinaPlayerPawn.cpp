@@ -6,9 +6,14 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "GameFramework/GameUserSettings.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Widgets/SWindow.h"
 
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaGameMode.h"
@@ -73,6 +78,11 @@ void ATomatinaPlayerPawn::BeginPlay()
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);
 	PC->SetInputMode(InputMode);
+
+	if (!bTestMode)
+	{
+		EnsureDualScreenWindowLayout();
+	}
 }
 
 void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -114,6 +124,16 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	if (!PC || !SceneCapture_Zoom) { return; }
+
+	if (!bTestMode && !bWindowLayoutVerified)
+	{
+		WindowLayoutRetryElapsed += DeltaTime;
+		if (WindowLayoutRetryElapsed >= 0.5f && WindowLayoutRetryCount < 6)
+		{
+			WindowLayoutRetryElapsed = 0.f;
+			EnsureDualScreenWindowLayout();
+		}
+	}
 
 	// ── ZoomAlpha の補間（実時間ベース） ───────────────────────────────
 	const float RealDelta = FApp::GetDeltaTime();
@@ -330,4 +350,59 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 void ATomatinaPlayerPawn::OnLook(const FInputActionValue& Value)
 {
 	CurrentLookInput += Value.Get<FVector2D>();
+}
+
+void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
+{
+	if (!PC)
+	{
+		return;
+	}
+
+	const int32 DesiredW = FMath::Max(1, FMath::RoundToInt(MainWidth + PhoneWidth));
+	const int32 DesiredH = FMath::Max(1, FMath::RoundToInt(MainHeight));
+
+	int32 ViewW = 0;
+	int32 ViewH = 0;
+	PC->GetViewportSize(ViewW, ViewH);
+
+	if (ViewW >= DesiredW && ViewH >= DesiredH)
+	{
+		if (!bWindowLayoutVerified)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaPlayerPawn: ウィンドウサイズ確認 OK Viewport=(%dx%d) Required=(%dx%d)"),
+				ViewW, ViewH, DesiredW, DesiredH);
+		}
+		bWindowLayoutVerified = true;
+		return;
+	}
+
+	if (UGameUserSettings* Settings = UGameUserSettings::GetGameUserSettings())
+	{
+		Settings->SetFullscreenMode(EWindowMode::Windowed);
+		Settings->SetScreenResolution(FIntPoint(DesiredW, DesiredH));
+		Settings->ApplyResolutionSettings(false);
+		Settings->ApplySettings(false);
+	}
+
+	PC->ConsoleCommand(FString::Printf(TEXT("r.SetRes %dx%dw"), DesiredW, DesiredH), true);
+
+	// ウィンドウを (0,0) に移動してメインモニタ左上から右にスパンさせる。
+	// スタンドアロン起動時のみ有効 (PIE ではエディタがウィンドウ位置を管理しており、
+	// FSlateApplication::GetActiveTopLevelWindow() がエディタウィンドウを返してしまう場合がある)。
+	if (FSlateApplication::IsInitialized())
+	{
+		if (TSharedPtr<SWindow> GameWindow = GEngine && GEngine->GameViewport
+			? GEngine->GameViewport->GetWindow()
+			: nullptr)
+		{
+			GameWindow->MoveWindowTo(FVector2D(0.f, 0.f));
+		}
+	}
+
+	WindowLayoutRetryCount++;
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaPlayerPawn: ウィンドウサイズ不足 Viewport=(%dx%d) Required=(%dx%d) -> r.SetRes 適用試行 %d/6"),
+		ViewW, ViewH, DesiredW, DesiredH, WindowLayoutRetryCount);
 }
