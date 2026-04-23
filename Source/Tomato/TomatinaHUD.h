@@ -10,6 +10,7 @@
 class UUserWidget;
 class UTexture2D;
 class UMaterialInterface;
+class SWindow;
 
 /**
  * Tomatina の HUD。
@@ -62,6 +63,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> TestPipWidgetClass;
 
+	/** 第二ウィンドウ (スマホ側) に出す UserWidget。
+	 *  想定階層:
+	 *    Root: CanvasPanel (Fill)
+	 *      - IMG_ZoomView (Image, Fill) — C++ が RT_Zoom をバインド
+	 *      - PhoneSplatContainer (CanvasPanel, Fill) — 汚れ動的生成先
+	 *      - IMG_PhoneCursor (Image, CanvasPanelSlot) — ズーム中のクロスヘア
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> PhoneViewWidgetClass;
+
 	// =========================================================================
 	// マテリアル・テクスチャ
 	// =========================================================================
@@ -105,13 +116,17 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
-	float PhoneWidth = 2556.f;
+	float PhoneWidth = 2024.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
-	float PhoneHeight = 1179.f;
+	float PhoneHeight = 1152.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
 	bool bTestMode = true;
+
+	/** true なら HUD が第二 SWindow を生成しスマホ側 UI を独立ウィンドウに出す */
+	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
+	bool bUseSeparatePhoneWindow = true;
 
 	// =========================================================================
 	// カーソル追従（C++ で位置操作する例外1）
@@ -211,6 +226,9 @@ protected:
 	UPROPERTY() UUserWidget* DirtOverlayWidget    = nullptr;
 	UPROPERTY() UUserWidget* MissionDisplayWidget = nullptr;
 	UPROPERTY() UUserWidget* TestPipWidget        = nullptr;
+	UPROPERTY() UUserWidget* PhoneViewWidget      = nullptr;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// ── 都度生成・破棄する Widget ─────────────────
 	UPROPERTY() UUserWidget* PhotoResultWidget    = nullptr;
@@ -259,4 +277,13 @@ private:
 
 	/** ZoomView 用 Image に RT_Zoom（またはマテリアル）を設定する */
 	bool ConfigureZoomImageContent(class UImage* ImageWidget, const TCHAR* WidgetLabel);
+
+	/** 第二 SWindow を生成しスマホ側 UI (PhoneViewWidget) をアタッチ */
+	void CreatePhoneWindow();
+
+	/** 第二 SWindow を破棄 */
+	void DestroyPhoneWindow();
+
+	/** スマホウィンドウの生成済み Slate Window */
+	TSharedPtr<SWindow> PhoneWindow;
 };
