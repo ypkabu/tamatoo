@@ -3,6 +3,7 @@
 #include "TomatinaHUD.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
@@ -12,6 +13,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
+#include "Styling/SlateColor.h"
 
 #include "TomatinaPlayerPawn.h"
 
@@ -58,7 +60,12 @@ void ATomatinaHUD::BeginPlay()
 	if (ViewFinderWidgetClass)
 	{
 		ViewFinderWidget = CreateWidget<UUserWidget>(PC, ViewFinderWidgetClass);
-		if (ViewFinderWidget) { ViewFinderWidget->AddToViewport(100); }
+		if (ViewFinderWidget)
+		{
+			ViewFinderWidget->AddToViewport(100);
+			BindZoomMaterialToWidget(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
+			LayoutPhoneZoomImage(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
+		}
 	}
 	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: ViewFinderWidgetClass 未設定")); }
 
@@ -90,6 +97,7 @@ void ATomatinaHUD::BeginPlay()
 		{
 			MissionDisplayWidget->AddToViewport(250);
 			MissionDisplayWidget->SetVisibility(ESlateVisibility::Hidden);
+			ValidateMissionStylishWidgets();
 		}
 	}
 	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: MissionDisplayWidgetClass 未設定")); }
@@ -102,22 +110,169 @@ void ATomatinaHUD::BeginPlay()
 		{
 			TestPipWidget->AddToViewport(110);
 			TestPipWidget->SetVisibility(ESlateVisibility::Visible);
-
-			UImage* Img = Cast<UImage>(TestPipWidget->GetWidgetFromName(TEXT("IMG_ZoomView")));
-			if (Img && ZoomDisplayMaterial)
-			{
-				Img->SetBrushFromMaterial(ZoomDisplayMaterial);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: TestPip IMG_ZoomView=%s Material=%s"),
-					Img ? TEXT("OK") : TEXT("NULL"),
-					ZoomDisplayMaterial ? TEXT("OK") : TEXT("NULL"));
-			}
+			BindZoomMaterialToWidget(TestPipWidget, TEXT("IMG_ZoomView"), TEXT("TestPip"));
+			LayoutPhoneZoomImage(TestPipWidget, TEXT("IMG_ZoomView"), TEXT("TestPip"));
 		}
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 完了"));
+}
+
+// =============================================================================
+// BindZoomMaterialToWidget
+// =============================================================================
+bool ATomatinaHUD::BindZoomMaterialToWidget(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel)
+{
+	if (!Widget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::BindZoomMaterialToWidget: %s Widget が null"), WidgetLabel);
+		return false;
+	}
+
+	if (!ZoomDisplayMaterial)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::BindZoomMaterialToWidget: ZoomDisplayMaterial 未設定 (%s)"), WidgetLabel);
+		return false;
+	}
+
+	if (UImage* Preferred = Cast<UImage>(Widget->GetWidgetFromName(PreferredImageName)))
+	{
+		Preferred->SetBrushFromMaterial(ZoomDisplayMaterial);
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: %s.%s に ZoomDisplayMaterial を設定"), WidgetLabel, *PreferredImageName.ToString());
+		return true;
+	}
+
+	UWidgetTree* Tree = Widget->WidgetTree;
+	if (!Tree)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: %s の WidgetTree が null"), WidgetLabel);
+		return false;
+	}
+
+	TArray<UWidget*> AllWidgets;
+	Tree->GetAllWidgets(AllWidgets);
+
+	for (UWidget* W : AllWidgets)
+	{
+		UImage* Img = Cast<UImage>(W);
+		if (!Img) { continue; }
+
+		const FString N = Img->GetName();
+		const bool bLooksLikeZoomTarget =
+			N.Contains(TEXT("Zoom"), ESearchCase::IgnoreCase)
+			|| N.Contains(TEXT("Phone"), ESearchCase::IgnoreCase)
+			|| N.Contains(TEXT("Finder"), ESearchCase::IgnoreCase);
+
+		if (!bLooksLikeZoomTarget) { continue; }
+
+		Img->SetBrushFromMaterial(ZoomDisplayMaterial);
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s の候補 Image '%s' に ZoomDisplayMaterial を設定（フォールバック）"),
+			WidgetLabel, *N);
+		return true;
+	}
+
+	UE_LOG(LogTemp, Error,
+		TEXT("ATomatinaHUD: %s にズーム表示用 Image が見つかりません。推奨名は %s"),
+		WidgetLabel, *PreferredImageName.ToString());
+	return false;
+}
+
+// =============================================================================
+// LayoutPhoneZoomImage
+// =============================================================================
+void ATomatinaHUD::LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel)
+{
+	if (!Widget)
+	{
+		return;
+	}
+
+	UImage* TargetImage = Cast<UImage>(Widget->GetWidgetFromName(PreferredImageName));
+	if (!TargetImage)
+	{
+		UWidgetTree* Tree = Widget->WidgetTree;
+		if (!Tree)
+		{
+			return;
+		}
+
+		TArray<UWidget*> AllWidgets;
+		Tree->GetAllWidgets(AllWidgets);
+		for (UWidget* W : AllWidgets)
+		{
+			UImage* Img = Cast<UImage>(W);
+			if (!Img) { continue; }
+
+			const FString N = Img->GetName();
+			if (N.Contains(TEXT("Zoom"), ESearchCase::IgnoreCase)
+				|| N.Contains(TEXT("Phone"), ESearchCase::IgnoreCase)
+				|| N.Contains(TEXT("Finder"), ESearchCase::IgnoreCase))
+			{
+				TargetImage = Img;
+				break;
+			}
+		}
+	}
+
+	if (!TargetImage)
+	{
+		return;
+	}
+
+	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(TargetImage->Slot);
+	if (!Slot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: %s のズーム Image は CanvasPanelSlot ではありません"), WidgetLabel);
+		return;
+	}
+
+	// メイン右隣に iPhone 描画領域を配置。高さが足りない場合は中央寄せ。
+	const float PhoneX = MainWidth;
+	const float PhoneY = FMath::Max(0.f, (MainHeight - PhoneHeight) * 0.5f);
+
+	Slot->SetAutoSize(false);
+	Slot->SetPosition(FVector2D(PhoneX, PhoneY));
+	Slot->SetSize(FVector2D(PhoneWidth, PhoneHeight));
+	Slot->SetAlignment(FVector2D(0.f, 0.f));
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD: %s のズーム領域を配置 Pos=(%.0f,%.0f) Size=(%.0f,%.0f)"),
+		WidgetLabel, PhoneX, PhoneY, PhoneWidth, PhoneHeight);
+}
+
+// =============================================================================
+// ValidateMissionStylishWidgets
+// =============================================================================
+void ATomatinaHUD::ValidateMissionStylishWidgets()
+{
+	if (!MissionDisplayWidget)
+	{
+		return;
+	}
+
+	const bool bHasRank = (MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_StylishRank")) != nullptr);
+	const bool bHasCombo = (MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_StylishCombo")) != nullptr);
+	const bool bHasGauge = (MissionDisplayWidget->GetWidgetFromName(TEXT("PB_StylishGauge")) != nullptr);
+
+	if (!bHasRank)
+	{
+		UE_LOG(LogTemp, Error, TEXT("WBP_MissionDisplay: TXT_StylishRank が見つかりません（名前完全一致が必要）"));
+	}
+	if (!bHasCombo)
+	{
+		UE_LOG(LogTemp, Error, TEXT("WBP_MissionDisplay: TXT_StylishCombo が見つかりません（名前完全一致が必要）"));
+	}
+	if (!bHasGauge)
+	{
+		UE_LOG(LogTemp, Error, TEXT("WBP_MissionDisplay: PB_StylishGauge が見つかりません（名前完全一致が必要）"));
+	}
+
+	if (bHasRank && bHasCombo && bHasGauge)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("WBP_MissionDisplay: スタイリッシュ UI 3要素を検出しました"));
+		UpdateStylishDisplay(TEXT("C"), 0.f, 0, false);
+	}
 }
 
 // =============================================================================
@@ -441,6 +596,49 @@ void ATomatinaHUD::UpdateTotalScore(int32 InTotalScore)
 	{
 		Txt->SetText(FText::FromString(
 			FString::Printf(TEXT("Score: %d"), InTotalScore)));
+	}
+}
+
+// =============================================================================
+// UpdateStylishDisplay — MissionDisplay のスタイリッシュ UI を更新
+// 対象 Widget 名:
+//   TXT_StylishRank, TXT_StylishCombo, PB_StylishGauge
+// =============================================================================
+void ATomatinaHUD::UpdateStylishDisplay(const FString& RankText, float GaugePercent, int32 ComboCount, bool bDanger)
+{
+	if (!MissionDisplayWidget) { return; }
+
+	const float Gauge01 = FMath::Clamp(GaugePercent, 0.f, 1.f);
+	const FLinearColor RankColor = bDanger
+		? FLinearColor(1.0f, 0.25f, 0.1f, 1.0f)
+		: FLinearColor(1.0f, 0.9f, 0.2f, 1.0f);
+
+	if (UTextBlock* TxtRank = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_StylishRank"))))
+	{
+		TxtRank->SetText(FText::FromString(FString::Printf(TEXT("RANK %s"), *RankText)));
+		TxtRank->SetColorAndOpacity(FSlateColor(RankColor));
+	}
+
+	if (UTextBlock* TxtCombo = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_StylishCombo"))))
+	{
+		if (ComboCount > 1)
+		{
+			TxtCombo->SetText(FText::FromString(FString::Printf(TEXT("x%d COMBO"), ComboCount)));
+		}
+		else
+		{
+			TxtCombo->SetText(FText::FromString(TEXT("COMBO 0")));
+		}
+		TxtCombo->SetColorAndOpacity(FSlateColor(RankColor));
+	}
+
+	if (UProgressBar* GaugeBar = Cast<UProgressBar>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("PB_StylishGauge"))))
+	{
+		GaugeBar->SetPercent(Gauge01);
+		GaugeBar->SetFillColorAndOpacity(RankColor);
 	}
 }
 

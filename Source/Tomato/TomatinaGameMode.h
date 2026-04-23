@@ -13,6 +13,7 @@ class UTexture2D;
 class USoundBase;
 class ATomatinaTargetSpawner;
 class ATomatinaHUD;
+class ATomatoDirtManager;
 
 // -----------------------------------------------------------------------------
 // FMissionData — 1 ミッション分の設定
@@ -49,6 +50,16 @@ struct FMissionData
 	/** ターゲットのプレビュー画像（HUD の IMG_TargetPreview に表示） */
 	UPROPERTY(EditAnywhere)
 	UTexture2D* TargetImage = nullptr;
+};
+
+UENUM(BlueprintType)
+enum class EStylishRank : uint8
+{
+	C   UMETA(DisplayName="C"),
+	B   UMETA(DisplayName="B"),
+	A   UMETA(DisplayName="A"),
+	S   UMETA(DisplayName="S"),
+	SSS UMETA(DisplayName="SSS"),
 };
 
 UCLASS()
@@ -103,6 +114,92 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Score")
 	int32 DirtPenaltyPerSplat = -5;
 
+	// ── スタイリッシュランク ───────────────────────────────────
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Stylish")
+	EStylishRank StylishRank = EStylishRank::C;
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Stylish")
+	float StylishGauge = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Stylish")
+	int32 StylishComboCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|Stylish")
+	float DirtCoverage01 = 0.0f;
+
+	/** スタイリッシュゲージの上限 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishGaugeMax = 100.0f;
+
+	/** 基本減衰量（毎秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishBaseDecayPerSecond = 3.0f;
+
+	/** 汚れがこの割合を超えると減衰強化 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float StylishDirtDangerThreshold = 0.72f;
+
+	/** 汚れがこの割合を超えると大幅減衰 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float StylishDirtCriticalThreshold = 0.92f;
+
+	/** Danger 閾値超過時の追加減衰（毎秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishDirtDangerDecayPerSecond = 12.0f;
+
+	/** Critical 閾値超過時の追加減衰（毎秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishDirtCriticalDecayPerSecond = 32.0f;
+
+	/** この点数以上の写真を「高得点」とみなしてコンボ対象にする */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	int32 StylishGoodShotThreshold = 60;
+
+	/** 高得点写真の連続扱いになる最大間隔（秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishTempoWindow = 4.0f;
+
+	/** 写真スコア→ゲージ加算の係数（100点で +20 なら 0.2） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishScoreToGaugeScale = 0.22f;
+
+	/** 高得点連続のテンポボーナス加算値 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishTempoBonusGauge = 10.0f;
+
+	/** 撮影失敗時のゲージ減少量 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishMissPenalty = 15.0f;
+
+	/** 失敗時にコンボをリセットするか */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	bool bResetComboOnMiss = true;
+
+	/** B/A/S/SSS への昇格閾値（C は 0） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishThresholdB = 20.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishThresholdA = 45.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishThresholdS = 70.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	float StylishThresholdSSS = 90.0f;
+
+	/** このランク以上を「高ランク状態」とみなし、ターゲット演出を解放 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Stylish")
+	EStylishRank HiddenActionMinRank = EStylishRank::S;
+
+	/** スタイリッシュランク変化時の BP フック */
+	UFUNCTION(BlueprintImplementableEvent, Category="Tomatina|Stylish")
+	void OnStylishRankChanged(EStylishRank NewRank, EStylishRank OldRank, bool bRankUp);
+
+	/** 高ランク状態での撮影成功時フック（演出・SE 用） */
+	UFUNCTION(BlueprintImplementableEvent, Category="Tomatina|Stylish")
+	void OnHighStylishShot(ATomatinaTargetBase* Target, EStylishRank Rank, int32 ShotScore);
+
 	// ── 内部状態 ──────────────────────────────────────────────
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	bool bInCountdown = false;
@@ -127,8 +224,8 @@ private:
 	// ── 画面サイズ（PlayerPawn から取得してキャッシュ） ────────
 	float MainWidth   = 2560.f;
 	float MainHeight  = 1600.f;
-	float PhoneWidth  = 1024.f;
-	float PhoneHeight = 768.f;
+	float PhoneWidth  = 2256.f;
+	float PhoneHeight = 1179.f;
 
 	// ── カウントダウン ───────────────────────────────────────
 	float CountdownRemaining = 0.f;
@@ -145,4 +242,16 @@ private:
 	void ShowFinalResult();
 	ATomatinaHUD* GetTomatinaHUD() const;
 	void CachePlayerPawnSizes();
+	ATomatoDirtManager* GetDirtManager();
+	float CalculateDirtCoverage01();
+	void UpdateStylishGauge(float RealDelta);
+	void AddStylishGaugeFromShot(int32 ShotScore);
+	void ApplyStylishRankFromGauge();
+	FName GetStylishRankName(EStylishRank Rank) const;
+	void PushStylishStateToHUD();
+
+	UPROPERTY()
+	ATomatoDirtManager* CachedDirtManager = nullptr;
+
+	float LastHighScoreShotTime = -1000.f;
 };

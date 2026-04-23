@@ -50,6 +50,42 @@ public:
 	USkeletalMeshComponent* MeshComp;
 
 	// =========================================================================
+	// 撮影スコア（ターゲット個別チューニング）
+	// =========================================================================
+
+	/** 全身が写ったときの基礎点 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore", meta=(ClampMin="0"))
+	int32 FullBodyScore = 100;
+
+	/** 上半身のみ写ったときの基礎点 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore", meta=(ClampMin="0"))
+	int32 UpperBodyScore = 50;
+
+	/** 足元のみ写ったときの基礎点 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore", meta=(ClampMin="0"))
+	int32 LowerBodyScore = 10;
+
+	/** 被写体ごとの倍率（例: 1.5 で 1.5 倍） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore", meta=(ClampMin="0.1"))
+	float PhotoScoreMultiplier = 1.0f;
+
+	/** 被写体ごとの固定加点（難しい被写体用） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore")
+	int32 PhotoScoreFlatBonus = 0;
+
+	/** スタイリッシュ高ランク帯でこの被写体を撮ると入る追加点 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|PhotoScore")
+	int32 HighRankBonusScore = 0;
+
+	/** スタイリッシュランクが変化したときの BP フック（ゴリラ演出トリガー用） */
+	UFUNCTION(BlueprintImplementableEvent, Category="Target|Stylish")
+	void OnStylishRankChanged(FName NewRank, bool bIsHighRank);
+
+	/** 高ランク状態でこの被写体を撮影した瞬間の BP フック */
+	UFUNCTION(BlueprintImplementableEvent, Category="Target|Stylish")
+	void OnHighRankShot(FName RankName, int32 ShotScore);
+
+	// =========================================================================
 	// 目印（頭上に浮かぶアイコン Widget）
 	// =========================================================================
 

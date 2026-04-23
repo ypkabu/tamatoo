@@ -20,6 +20,13 @@ enum class ETomatoTrajectory : uint8
 	Curve     UMETA(DisplayName="Curve"),     // 横カーブ
 };
 
+UENUM(BlueprintType)
+enum class ETomatoImpactVariant : uint8
+{
+	NormalRed    UMETA(DisplayName="Normal Red"),
+	StickyYellow UMETA(DisplayName="Sticky Yellow"),
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ATomatinaProjectile
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +80,22 @@ public:
 	/** トマトを破棄するまでの最大寿命（秒）。プレイヤーに当たらず消える保険。 */
 	UPROPERTY(EditAnywhere, Category="Tomato")
 	float MaxLifetime = 6.0f;
+
+	/** 特殊トマト（黄色粘着）を混ぜるか */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Special")
+	bool bEnableSpecialTomato = true;
+
+	/** 黄色粘着トマトの出現確率（プレイヤー命中時） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Special", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float StickyYellowChance = 0.2f;
+
+	/** 黄色粘着トマトのサイズ倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Special", meta=(ClampMin="0.5", ClampMax="3.0"))
+	float StickySizeMultiplier = 1.15f;
+
+	/** 黄色粘着トマトを剥がすのに必要な連続ダッシュ回数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Special", meta=(ClampMin="1", ClampMax="16"))
+	int32 StickyRequiredDashCount = 4;
 
 	/**
 	 * このトマトはプレイヤーを狙ってる弾か。
@@ -137,6 +160,9 @@ private:
 
 	/** レベル上の ATomatoDirtManager を取得（キャッシュ付き） */
 	ATomatoDirtManager* GetDirtManager();
+
+	/** 命中時の汚れバリエーションを決定する */
+	ETomatoImpactVariant PickImpactVariant() const;
 
 	UPROPERTY()
 	ATomatoDirtManager* CachedDirtManager;
