@@ -108,7 +108,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	float MaxDirtSize = 0.6f;
 
-	/** 汚れが出現する正規化範囲の最小値（メイン画面内の左上、0〜1） */
+	/** 汚れが出現する正規化範囲の最小値（メイン画面内の左上、0〜1）。
+	 *  スマホ/写真は等倍で表示されるのでここで制限すると全体が狭まる。
+	 *  メイン側だけの表示制限は HUD の MainDirtAreaRatio で別途行う。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config", meta=(ClampMin="0.0", ClampMax="1.0"))
 	FVector2D SpawnRangeMin = FVector2D(0.0f, 0.0f);
 

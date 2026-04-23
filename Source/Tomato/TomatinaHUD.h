@@ -106,6 +106,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Dirt")
 	float DirtInnerMargin = 30.f;
 
+	/** スマホ側 (PhoneView) に表示する汚れのサイズ倍率。
+	 *  物理サイズが小さいので相対的に大きく見えがち → 0.7 等に落とすと自然になる */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Dirt", meta=(ClampMin="0.1", ClampMax="2.0"))
+	float DirtSizeScalePhone = 0.7f;
+
+	/** 写真リザルト画面の汚れサイズ倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Dirt", meta=(ClampMin="0.1", ClampMax="2.0"))
+	float DirtSizeScalePhoto = 0.5f;
+
+	/** メインモニター側の汚れ表示エリアの割合 (X, Y)。中央寄せで縮小。
+	 *  デフォルト 2560x1600 のうち中央 1920x1080 相当
+	 *  (1920/2560, 1080/1600) = (0.75, 0.675)。スマホ・写真には影響しない。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Dirt", meta=(ClampMin="0.1", ClampMax="1.0"))
+	FVector2D MainDirtAreaRatio = FVector2D(0.75f, 0.675f);
+
 	// =========================================================================
 	// 画面サイズ（PlayerPawn から BeginPlay で取得）
 	// =========================================================================
@@ -228,6 +243,9 @@ protected:
 	UPROPERTY() UUserWidget* TestPipWidget        = nullptr;
 	UPROPERTY() UUserWidget* PhoneViewWidget      = nullptr;
 
+	/** ズームマテリアルの動的インスタンス (PhoneView 用)。RT_Zoom をパラメータ注入して持つ */
+	UPROPERTY() class UMaterialInstanceDynamic* PhoneZoomDMI = nullptr;
+
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// ── 都度生成・破棄する Widget ─────────────────
@@ -261,7 +279,8 @@ private:
 		float AreaWidth,
 		float AreaHeight,
 		float OriginX,
-		float OriginY);
+		float OriginY,
+		float SizeScale = 1.0f);
 
 	/** WBP_MissionDisplay に必要なスタイリッシュ UI 名称が揃っているかを確認する */
 	void ValidateMissionStylishWidgets();
