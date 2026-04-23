@@ -141,13 +141,25 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 		const bool bHeadVisible = CheckVisibility(ZoomCamera, Target, HeadLoc, ScreenWidth, ScreenHeight);
 		const bool bRootVisible = CheckVisibility(ZoomCamera, Target, RootLoc, ScreenWidth, ScreenHeight);
 
+		const int32 TargetFullBodyScore = FMath::Max(0, Target->FullBodyScore);
+		const int32 TargetUpperBodyScore = FMath::Max(0, Target->UpperBodyScore);
+		const int32 TargetLowerBodyScore = FMath::Max(0, Target->LowerBodyScore);
+		const float TargetScoreMul = FMath::Max(0.1f, Target->PhotoScoreMultiplier);
+		const int32 TargetFlatBonus = Target->PhotoScoreFlatBonus;
+
 		int32   ThisScore   = 0;
 		FString ThisComment = TEXT("写ってない！");
 
-		if (bHeadVisible && bRootVisible)      { ThisScore = 100; ThisComment = TEXT("全身バッチリ！"); }
-		else if (bHeadVisible)                 { ThisScore =  50; ThisComment = TEXT("上半身だけ撮れた"); }
-		else if (bRootVisible)                 { ThisScore =  10; ThisComment = TEXT("足だけ撮れた"); }
-		else                                   { ThisScore =   0; ThisComment = TEXT("写ってない！"); }
+		if (bHeadVisible && bRootVisible)      { ThisScore = TargetFullBodyScore; ThisComment = TEXT("全身バッチリ！"); }
+		else if (bHeadVisible)                 { ThisScore = TargetUpperBodyScore; ThisComment = TEXT("上半身だけ撮れた"); }
+		else if (bRootVisible)                 { ThisScore = TargetLowerBodyScore; ThisComment = TEXT("足だけ撮れた"); }
+		else                                   { ThisScore = 0; ThisComment = TEXT("写ってない！"); }
+
+		if (ThisScore > 0)
+		{
+			ThisScore = FMath::RoundToInt(ThisScore * TargetScoreMul) + TargetFlatBonus;
+			ThisScore = FMath::Max(0, ThisScore);
+		}
 
 		UE_LOG(LogTemp, Warning, TEXT(" Target=%s Head=%d Root=%d Score=%d"),
 			*Target->GetName(), bHeadVisible ? 1 : 0, bRootVisible ? 1 : 0, ThisScore);
