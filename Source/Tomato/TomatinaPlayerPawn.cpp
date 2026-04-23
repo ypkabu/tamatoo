@@ -150,14 +150,19 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
 
 	// ── ZoomAlpha >= 0.95：カーソルを iPhone 中央に一度だけ飛ばす ──────
+	// 旧スパンウィンドウ方式のときのみ。第二ウィンドウ方式ではスマホ側は独立 SWindow
+	// なので OS カーソルを動かす必要がなく、IMG_PhoneCursor(UMG) で視覚的に示す。
 	if (bIsZooming && ZoomAlpha >= 0.95f && !bCursorCentered)
 	{
 		bCursorCentered = true;
-		const FVector2D Center =
-			UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
-		PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
-			Center.X, Center.Y);
+		if (!bUseSeparatePhoneWindow)
+		{
+			const FVector2D Center =
+				UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
+			PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
+				Center.X, Center.Y);
+		}
 	}
 
 	// ── ZoomAlpha >= 0.99：カーソル非表示 / マウスルック有効化 ──────────

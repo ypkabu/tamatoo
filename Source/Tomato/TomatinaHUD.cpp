@@ -187,6 +187,40 @@ void ATomatinaHUD::CreatePhoneWindow()
 
 	BindZoomMaterialToWidget(PhoneViewWidget, TEXT("IMG_ZoomView"), TEXT("PhoneView"));
 
+	// WBP 側で Fill アンカーが付いていないと Image のスロットサイズが 0 のまま
+	// になり RT を貼っても見えない。C++ から強制的に親 CanvasPanel 全面塗りにする。
+	if (UImage* ZoomImg = Cast<UImage>(
+			PhoneViewWidget->GetWidgetFromName(TEXT("IMG_ZoomView"))))
+	{
+		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(ZoomImg->Slot))
+		{
+			Slot->SetAutoSize(false);
+			Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+			Slot->SetAlignment(FVector2D(0.f, 0.f));
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView を全面塗りに強制"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView 親が CanvasPanel でない (親を CanvasPanel にしてください)"));
+		}
+	}
+
+	// PhoneSplatContainer も同様に親全面で覆う (ここに汚れが動的生成される)
+	if (UCanvasPanel* SplatC = Cast<UCanvasPanel>(
+			PhoneViewWidget->GetWidgetFromName(TEXT("PhoneSplatContainer"))))
+	{
+		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(SplatC->Slot))
+		{
+			Slot->SetAutoSize(false);
+			Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+			Slot->SetAlignment(FVector2D(0.f, 0.f));
+		}
+	}
+
 	const FVector2D ScreenPos(MainWidth, 0.f);
 	const FVector2D ClientSize(PhoneWidth, PhoneHeight);
 
@@ -374,12 +408,15 @@ UImage* ATomatinaHUD::FindOrCreateZoomImage(UUserWidget* Widget, FName Preferred
 
 	if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(RuntimeZoomImage))
 	{
+		// 親 CanvasPanel 全面に塗る (Anchor 0,0〜1,1 / Offset 全0)
 		Slot->SetAutoSize(false);
 		Slot->SetAlignment(FVector2D(0.f, 0.f));
+		Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+		Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
 	}
 
 	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD: %s に IMG_ZoomView_Runtime を実行時生成しました"),
+		TEXT("ATomatinaHUD: %s に IMG_ZoomView_Runtime を実行時生成しました (親全面塗り)"),
 		WidgetLabel);
 
 	return RuntimeZoomImage;
@@ -405,11 +442,19 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 	{
 		FSlateBrush Brush = ImageWidget->GetBrush();
 		Brush.SetResourceObject(ZoomRT);
+		// DrawAs = Image にしないと 9-slice 等で扱われて描画されないことがある
+		Brush.DrawAs = ESlateBrushDrawType::Image;
+		// ImageSize を RT のサイズで埋めないと 0x0 になり、親スロットサイズに
+		// 従わないケース (RootCanvas 以外の親など) で何も描画されない
+		if (ZoomRT->SizeX > 0 && ZoomRT->SizeY > 0)
+		{
+			Brush.ImageSize = FVector2D(ZoomRT->SizeX, ZoomRT->SizeY);
+		}
 		ImageWidget->SetBrush(Brush);
 		ImageWidget->SetColorAndOpacity(FLinearColor::White);
 		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: %s に RT_Zoom を直接バインドしました"),
-			WidgetLabel);
+			TEXT("ATomatinaHUD: %s に RT_Zoom を直接バインド (RT=%dx%d)"),
+			WidgetLabel, ZoomRT->SizeX, ZoomRT->SizeY);
 		return true;
 	}
 
