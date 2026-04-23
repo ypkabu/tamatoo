@@ -203,6 +203,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Dirt")
 	TArray<FDirtSplat> DirtSplats;
 
+	/** 最後に WipeDirtAt/ClearDirtAt が有効に呼ばれた RealTime 秒（2P 活動判定用） */
+	UPROPERTY(BlueprintReadOnly, Category="Dirt")
+	float LastWipeRealTime = -1000.f;
+
+	UFUNCTION(BlueprintCallable, Category="Dirt")
+	float GetSecondsSinceLastWipe() const;
+
 private:
 	/** SpawnDirt までの残り時間 */
 	float SpawnTimer = 0.0f;

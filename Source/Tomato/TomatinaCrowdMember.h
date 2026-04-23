@@ -97,6 +97,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
 	float MaxStartJitter = 1.5f;
 
+	/** true なら左右 1 軸のみ移動（スポーン位置の X は固定、Y だけ動く）。
+	 *  2 軸ランダム徘徊が嫌な場合に有効化する。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
+	bool bMoveLeftRightOnly = true;
+
+	/** 左右移動に使う軸。true = Y (横)、false = X (前後)。
+	 *  通常 Y=左右。レベル配置に応じて調整。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement", meta=(EditCondition="bMoveLeftRightOnly"))
+	bool bLeftRightUsesYAxis = true;
+
 	// =========================================================================
 	// 状態（BP / AnimBP から参照可）
 	// =========================================================================
@@ -133,7 +143,11 @@ private:
 	float   ActionCheckTimer = 0.f;  // 次の行動切替抽選までの時間
 	float   StartJitterTimer = 0.f;
 
+	/** 左右ペーシング用：次の目標が +側か -側か */
+	bool bPacingHeadingPositive = true;
+
 	void EnterAction(ECrowdAction NewAction);
-	FVector PickRandomPointInArea() const;
+	FVector PickRandomPointInArea();
+	FVector PickNextPacingTarget();
 	void TickMovement(float DeltaTime);
 };

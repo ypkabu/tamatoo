@@ -835,10 +835,12 @@ void ATomatinaHUD::HideMissionResult()
 // =============================================================================
 // ShowFinalResult — 全ミッション終了（WBP_FinalResult）
 // =============================================================================
-void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
+void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount,
+	const FString& AverageStylishRank, float SyncRate01)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowFinalResult Total=%d Missions=%d"),
-		InTotalScore, MissionCount);
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD::ShowFinalResult Total=%d Missions=%d AvgRank=%s Sync=%.1f%%"),
+		InTotalScore, MissionCount, *AverageStylishRank, SyncRate01 * 100.f);
 
 	APlayerController* PC = GetOwningPlayerController();
 	if (!PC || !FinalResultWidgetClass) { return; }
@@ -853,13 +855,14 @@ void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
 	if (!FinalResultWidget) { return; }
 	FinalResultWidget->AddToViewport(500);
 
+	// ── 総合点 ──
 	if (UTextBlock* TxtScore = Cast<UTextBlock>(
 			FinalResultWidget->GetWidgetFromName(TEXT("TXT_FinalScore"))))
 	{
 		TxtScore->SetText(FText::AsNumber(InTotalScore));
 	}
 
-	// Rank 判定（平均点基準）
+	// ── 総合ランク（平均点基準。旧互換） ──
 	const float Avg = (MissionCount > 0) ? static_cast<float>(InTotalScore) / MissionCount : 0.f;
 	FString Rank;
 	if      (Avg >= 80.f) { Rank = TEXT("S"); }
@@ -871,6 +874,27 @@ void ATomatinaHUD::ShowFinalResult(int32 InTotalScore, int32 MissionCount)
 			FinalResultWidget->GetWidgetFromName(TEXT("TXT_Rank"))))
 	{
 		TxtRank->SetText(FText::FromString(Rank));
+	}
+
+	// ── 平均スタイリッシュランク (撮影ごとに記録したランクの平均) ──
+	if (UTextBlock* TxtAvgRank = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_AverageRank"))))
+	{
+		TxtAvgRank->SetText(FText::FromString(AverageStylishRank));
+	}
+
+	// ── 1P-2P シンクロ率 (百分率表示) ──
+	const float Percent = FMath::Clamp(SyncRate01, 0.f, 1.f) * 100.f;
+	if (UTextBlock* TxtSync = Cast<UTextBlock>(
+			FinalResultWidget->GetWidgetFromName(TEXT("TXT_SyncRate"))))
+	{
+		TxtSync->SetText(FText::FromString(
+			FString::Printf(TEXT("%.0f%%"), Percent)));
+	}
+	if (UProgressBar* BarSync = Cast<UProgressBar>(
+			FinalResultWidget->GetWidgetFromName(TEXT("PB_SyncRate"))))
+	{
+		BarSync->SetPercent(FMath::Clamp(SyncRate01, 0.f, 1.f));
 	}
 }
 
