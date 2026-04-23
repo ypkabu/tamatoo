@@ -16,6 +16,7 @@
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Styling/SlateColor.h"
 #include "Widgets/SWindow.h"
@@ -438,14 +439,43 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 		? Pawn->SceneCapture_Zoom->TextureTarget
 		: nullptr;
 
+	// 第二ウィンドウ方式では Slate が RT ブラシをリサンプルしない既知問題を踏むので、
+	// マテリアル(DMI) 経由でサンプリングを毎フレーム走らせるのが最も確実。
+	// ZoomDisplayMaterial には M_ZoomDisplay (User Interface + Unlit) を BP 側で
+	// 割り当てておく。RT_Zoom をパラメータでもハードコードでも受けられるように
+	// よくあるパラメータ名へ注入する。
+	const bool bPreferMaterial = bUseSeparatePhoneWindow;
+
+	if (bPreferMaterial && ZoomDisplayMaterial)
+	{
+		UMaterialInstanceDynamic* DMI = UMaterialInstanceDynamic::Create(
+			ZoomDisplayMaterial, ImageWidget);
+		if (DMI)
+		{
+			if (ZoomRT)
+			{
+				// マテリアル側のパラメータ命名のブレに備え候補名を総当たり
+				DMI->SetTextureParameterValue(TEXT("RT_Zoom"),  ZoomRT);
+				DMI->SetTextureParameterValue(TEXT("Texture"),  ZoomRT);
+				DMI->SetTextureParameterValue(TEXT("MainTex"),  ZoomRT);
+				DMI->SetTextureParameterValue(TEXT("Zoom"),     ZoomRT);
+				DMI->SetTextureParameterValue(TEXT("SceneTex"), ZoomRT);
+			}
+			ImageWidget->SetBrushFromMaterial(DMI);
+			ImageWidget->SetColorAndOpacity(FLinearColor::White);
+			PhoneZoomDMI = DMI;
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial(DMI) をバインド (RT param 注入)"),
+				WidgetLabel);
+			return true;
+		}
+	}
+
 	if (ZoomRT)
 	{
 		FSlateBrush Brush = ImageWidget->GetBrush();
 		Brush.SetResourceObject(ZoomRT);
-		// DrawAs = Image にしないと 9-slice 等で扱われて描画されないことがある
 		Brush.DrawAs = ESlateBrushDrawType::Image;
-		// ImageSize を RT のサイズで埋めないと 0x0 になり、親スロットサイズに
-		// 従わないケース (RootCanvas 以外の親など) で何も描画されない
 		if (ZoomRT->SizeX > 0 && ZoomRT->SizeY > 0)
 		{
 			Brush.ImageSize = FVector2D(ZoomRT->SizeX, ZoomRT->SizeY);
@@ -461,6 +491,7 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 	if (ZoomDisplayMaterial)
 	{
 		ImageWidget->SetBrushFromMaterial(ZoomDisplayMaterial);
+		ImageWidget->SetColorAndOpacity(FLinearColor::White);
 		UE_LOG(LogTemp, Warning,
 			TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial をバインドしました（RT 未検出のため）"),
 			WidgetLabel);
@@ -523,6 +554,44 @@ void ATomatinaHUD::Tick(float DeltaSeconds)
 			ShutterFlashWidget = nullptr;
 			bFlashActive = false;
 			FlashElapsed = 0.f;
+		}
+	}
+
+	// ── 第二ウィンドウの ZoomView 強制リフレッシュ ─────────────────────
+	// Slate がセカンダリ SWindow で RT ブラシを再サンプルしないバグへの対策。
+	// DMI 経由なら毎フレーム RT パラメータを再注入すると material が再評価され
+	// 最新の RT 内容がサンプルされる。直接 RT バインドの場合は SetBrush() を
+	// 呼んで invalidate させる。
+	if (bUseSeparatePhoneWindow && PhoneViewWidget)
+	{
+		APlayerController* PC = GetOwningPlayerController();
+		ATomatinaPlayerPawn* Pawn = PC ? Cast<ATomatinaPlayerPawn>(PC->GetPawn()) : nullptr;
+		UTextureRenderTarget2D* ZoomRT = (Pawn && Pawn->SceneCapture_Zoom)
+			? Pawn->SceneCapture_Zoom->TextureTarget : nullptr;
+
+		if (PhoneZoomDMI && ZoomRT)
+		{
+			// DMI パラメータ再注入で material を毎フレーム再評価させる
+			PhoneZoomDMI->SetTextureParameterValue(TEXT("RT_Zoom"),  ZoomRT);
+			PhoneZoomDMI->SetTextureParameterValue(TEXT("Texture"),  ZoomRT);
+			PhoneZoomDMI->SetTextureParameterValue(TEXT("MainTex"),  ZoomRT);
+		}
+		else if (!PhoneZoomDMI && ZoomRT)
+		{
+			// DMI が作られていない (= マテリアル未設定) ので直接バインド経路。
+			// SetBrush を再呼び出しで invalidate → 再描画を促す。
+			if (UImage* ZoomImg = Cast<UImage>(
+					PhoneViewWidget->GetWidgetFromName(TEXT("IMG_ZoomView"))))
+			{
+				FSlateBrush Brush = ZoomImg->GetBrush();
+				Brush.SetResourceObject(ZoomRT);
+				Brush.DrawAs = ESlateBrushDrawType::Image;
+				if (ZoomRT->SizeX > 0 && ZoomRT->SizeY > 0)
+				{
+					Brush.ImageSize = FVector2D(ZoomRT->SizeX, ZoomRT->SizeY);
+				}
+				ZoomImg->SetBrush(Brush);
+			}
 		}
 	}
 }
@@ -702,7 +771,7 @@ void ATomatinaHUD::ShowResult(int32 Score, const FString& Comment, const TArray<
 		AddDirtSplatsToCanvas(
 			PhotoResultWidget, PhotoSplat, Dirts,
 			PhotoDisplayWidth, PhotoDisplayHeight,
-			0.f, 0.f);
+			0.f, 0.f, DirtSizeScalePhoto);
 	}
 	else
 	{
@@ -977,7 +1046,9 @@ void ATomatinaHUD::PlayShutterFlash()
 // =============================================================================
 void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 {
-	// ── メインウィンドウ側 ─────────────────────────────
+	// ── メインウィンドウ側 (中央 MainDirtAreaRatio のサブエリアに制限) ──
+	// Container の実 widget-space サイズを cached geometry から取得して、
+	// DPI スケーリング・レイアウト環境に依存せず正しく収まるようにする。
 	if (DirtOverlayWidget)
 	{
 		if (UCanvasPanel* Container = Cast<UCanvasPanel>(
@@ -985,21 +1056,32 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 		{
 			Container->ClearChildren();
 
-			// メインモニター領域 [0, MainWidth] × [0, MainHeight]
-			AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
-				MainWidth, MainHeight, 0.f, 0.f);
+			const FVector2D CachedSize = Container->GetCachedGeometry().GetLocalSize();
+			// まだレイアウトされていない初回は pixel 値にフォールバック
+			const float ContW = (CachedSize.X > 1.f) ? CachedSize.X : MainWidth;
+			const float ContH = (CachedSize.Y > 1.f) ? CachedSize.Y : MainHeight;
 
-			// 旧スパンウィンドウ方式でのみスマホ側もここに乗せる
+			const float RatioX = FMath::Clamp(MainDirtAreaRatio.X, 0.1f, 1.0f);
+			const float RatioY = FMath::Clamp(MainDirtAreaRatio.Y, 0.1f, 1.0f);
+
+			const float EffW  = ContW * RatioX;
+			const float EffH  = ContH * RatioY;
+			const float EffOX = (ContW - EffW) * 0.5f;
+			const float EffOY = (ContH - EffH) * 0.5f;
+
+			AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
+				EffW, EffH, EffOX, EffOY, 1.0f);
+
+			// 旧スパンウィンドウ方式でのみスマホ側もここに乗せる (レガシー経路)
 			if (!bUseSeparatePhoneWindow)
 			{
 				AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
-					PhoneWidth, PhoneHeight, MainWidth, 0.f);
+					PhoneWidth, PhoneHeight, MainWidth, 0.f, DirtSizeScalePhone);
 			}
 		}
 	}
 
-	// ── 第二ウィンドウ (Phone) 側 ─────────────────────────────
-	// スマホ側は独立 Widget 内の PhoneSplatContainer に原点 (0,0) で配置
+	// ── 第二ウィンドウ (Phone) 側 (スケール縮小) ─────────────────
 	if (bUseSeparatePhoneWindow && PhoneViewWidget)
 	{
 		if (UCanvasPanel* PhoneContainer = Cast<UCanvasPanel>(
@@ -1007,7 +1089,7 @@ void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 		{
 			PhoneContainer->ClearChildren();
 			AddDirtSplatsToCanvas(PhoneViewWidget, PhoneContainer, Dirts,
-				PhoneWidth, PhoneHeight, 0.f, 0.f);
+				PhoneWidth, PhoneHeight, 0.f, 0.f, DirtSizeScalePhone);
 		}
 	}
 }
@@ -1022,9 +1104,15 @@ void ATomatinaHUD::AddDirtSplatsToCanvas(
 	float AreaWidth,
 	float AreaHeight,
 	float OriginX,
-	float OriginY)
+	float OriginY,
+	float SizeScale)
 {
 	if (!OwnerWidget || !Container) { return; }
+
+	// 領域外にはみ出た子を強制的にクリップ
+	Container->SetClipping(EWidgetClipping::ClipToBounds);
+
+	const float SafeSizeScale = FMath::Max(0.01f, SizeScale);
 
 	for (const FDirtSplat& Dirt : Dirts)
 	{
@@ -1046,9 +1134,10 @@ void ATomatinaHUD::AddDirtSplatsToCanvas(
 		UCanvasPanelSlot* Slot = Container->AddChildToCanvas(Img);
 		if (!Slot) { continue; }
 
-		// Size は正規化スケール（0〜1）想定。1.0 を超える異常値は領域幅にクランプ
+		// Size は正規化スケール（0〜1）想定。1.0 を超える異常値は領域幅にクランプ。
+		// SizeScale で領域ごとに追加のサイズ縮小をかけられる (スマホ/写真用)。
 		const float ClampedNormSize = FMath::Clamp(Dirt.Size, 0.01f, 1.0f);
-		const float Size     = ClampedNormSize * AreaWidth;
+		const float Size     = ClampedNormSize * AreaWidth * SafeSizeScale;
 		const float HalfSize = Size * 0.5f;
 
 		// 中心座標を領域内に計算 → 汚れ全体が領域＋内側マージンに収まるようクランプ

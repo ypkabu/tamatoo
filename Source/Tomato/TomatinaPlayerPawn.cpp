@@ -8,6 +8,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Framework/Application/SlateApplication.h"
@@ -79,6 +80,42 @@ void ATomatinaPlayerPawn::BeginPlay()
 	InputMode.SetHideCursorDuringCapture(false);
 	PC->SetInputMode(InputMode);
 
+	// ── SceneCapture_Zoom 診断ログ ─────────────────────────────────────
+	//   bCaptureEveryFrame が false のままなら RT は更新されない。
+	//   BP で意図せず false になっていないかを可視化する。
+	if (SceneCapture_Zoom)
+	{
+		UTextureRenderTarget2D* RT = SceneCapture_Zoom->TextureTarget;
+		UE_LOG(LogTemp, Warning,
+			TEXT("SceneCapture 診断: bCaptureEveryFrame=%d bCaptureOnMovement=%d CaptureSource=%d FOV=%.1f RT=%s RTSize=%dx%d"),
+			SceneCapture_Zoom->bCaptureEveryFrame ? 1 : 0,
+			SceneCapture_Zoom->bCaptureOnMovement ? 1 : 0,
+			static_cast<int32>(SceneCapture_Zoom->CaptureSource),
+			SceneCapture_Zoom->FOVAngle,
+			*GetNameSafe(RT),
+			RT ? RT->SizeX : 0, RT ? RT->SizeY : 0);
+
+		// 安全側：毎フレームキャプチャを強制 ON (BP で false に戻されても起動時に正す)
+		if (!SceneCapture_Zoom->bCaptureEveryFrame)
+		{
+			SceneCapture_Zoom->bCaptureEveryFrame = true;
+			UE_LOG(LogTemp, Warning, TEXT("SceneCapture_Zoom: bCaptureEveryFrame を強制 ON"));
+		}
+
+		// CaptureSource が未設定(0 = HDR) のままだと UMG 上で真っ黒になりがち。
+		// Final Color (LDR) in RGB (= 2) を強制。BP で別の値に設定済みなら上書きしない。
+		if (SceneCapture_Zoom->CaptureSource == ESceneCaptureSource::SCS_SceneColorHDR)
+		{
+			SceneCapture_Zoom->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+			UE_LOG(LogTemp, Warning,
+				TEXT("SceneCapture_Zoom: CaptureSource を SCS_FinalColorLDR に自動補正"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("SceneCapture_Zoom が null です"));
+	}
+
 	if (!bTestMode)
 	{
 		EnsureDualScreenWindowLayout();
@@ -124,6 +161,15 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	if (!PC || !SceneCapture_Zoom) { return; }
+
+	// 手動 CaptureScene セーフティ。
+	// bCaptureEveryFrame=true が設定されていても UE 5.7 でなぜか自動キャプチャが
+	// 走らないケースが観測されているため、Tick で毎フレーム明示的に呼ぶ。
+	// 二重呼び出しになってもパフォ影響は軽微。
+	if (SceneCapture_Zoom->TextureTarget)
+	{
+		SceneCapture_Zoom->CaptureScene();
+	}
 
 	if (!bTestMode && !bWindowLayoutVerified)
 	{
@@ -270,6 +316,54 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 
 	TargetOffset = UTomatinaFunctionLibrary::CalculateZoomOffset(
 		PC, Hit, PlayerCamera, PlayerCamera->FieldOfView);
+
+	// ── 壁/床めり込み防止: カメラ位置→オフセット先をスイープして安全距離にクランプ ──
+	// TargetOffset はカメラローカル座標なのでワールドに変換してからスイープする。
+	if (GetWorld() && !TargetOffset.IsNearlyZero())
+	{
+		const FTransform CamXf = PlayerCamera->GetComponentTransform();
+		const FVector StartLoc = CamXf.GetLocation();
+		const FVector WorldOffset = CamXf.TransformVectorNoScale(TargetOffset);
+		const FVector EndLoc = StartLoc + WorldOffset;
+
+		FCollisionQueryParams SweepParams(TEXT("ZoomOffsetSweep"), false, this);
+		SweepParams.AddIgnoredActor(this);
+
+		FHitResult SweepHit;
+		const bool bBlocked = GetWorld()->SweepSingleByChannel(
+			SweepHit, StartLoc, EndLoc, FQuat::Identity,
+			ECC_Visibility,
+			FCollisionShape::MakeSphere(FMath::Max(1.f, ZoomOffsetSweepRadius)),
+			SweepParams);
+
+		if (bBlocked)
+		{
+			const float FullDist = WorldOffset.Size();
+			const float HitDist  = (SweepHit.Location - StartLoc).Size();
+			const float SafeDist = FMath::Max(0.f, HitDist - ZoomOffsetSafetyMargin);
+
+			if (FullDist > KINDA_SMALL_NUMBER)
+			{
+				const float Scale = FMath::Clamp(SafeDist / FullDist, 0.f, 1.f);
+				TargetOffset *= Scale;
+				UE_LOG(LogTemp, Warning,
+					TEXT("OnRightMousePressed: 壁検出 FullDist=%.1f HitDist=%.1f SafeDist=%.1f -> Scale=%.2f"),
+					FullDist, HitDist, SafeDist, Scale);
+			}
+			else
+			{
+				TargetOffset = FVector::ZeroVector;
+			}
+		}
+	}
+
+	// 近接クリップを広めに設定しておく。スイープで防ぎきれないケース (回転でめり込む等)
+	// でも壁の内側面が描画されず、ズームビューが黒く潰れない。
+	if (SceneCapture_Zoom && ZoomNearClippingPlane > 0.f)
+	{
+		SceneCapture_Zoom->CustomNearClippingPlane = ZoomNearClippingPlane;
+		SceneCapture_Zoom->bOverride_CustomNearClippingPlane = true;
+	}
 
 	bIsZooming      = true;
 	bZoomComplete   = false;

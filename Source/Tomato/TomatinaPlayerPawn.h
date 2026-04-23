@@ -108,6 +108,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float ZoomYawLimit = 0.f;
 
+	/** ズームカメラの位置オフセットスイープ時の球半径 (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomOffsetSweepRadius = 15.f;
+
+	/** スイープヒット時に壁から離しておく余裕距離 (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomOffsetSafetyMargin = 25.f;
+
+	/** SceneCapture の近接クリップ (cm)。壁へ食い込みかけた時にその面を描画しない保険 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float ZoomNearClippingPlane = 20.f;
+
 	UPROPERTY(BlueprintReadOnly, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
 
