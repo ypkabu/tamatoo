@@ -49,7 +49,7 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
-	float PhoneWidth = 2256.f;
+	float PhoneWidth = 2556.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
 	float PhoneHeight = 1179.f;
@@ -126,6 +126,12 @@ protected:
 private:
 	UPROPERTY()
 	APlayerController* PC = nullptr;
+
+	void EnsureDualScreenWindowLayout();
+
+	bool bWindowLayoutVerified = false;
+	float WindowLayoutRetryElapsed = 0.f;
+	int32 WindowLayoutRetryCount = 0;
 
 	// Tick で消費されるマウス入力（Triggered で蓄積）
 	FVector2D CurrentLookInput = FVector2D::ZeroVector;

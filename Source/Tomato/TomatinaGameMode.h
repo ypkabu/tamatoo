@@ -224,7 +224,7 @@ private:
 	// ── 画面サイズ（PlayerPawn から取得してキャッシュ） ────────
 	float MainWidth   = 2560.f;
 	float MainHeight  = 1600.f;
-	float PhoneWidth  = 2256.f;
+	float PhoneWidth  = 2556.f;
 	float PhoneHeight = 1179.f;
 
 	// ── カウントダウン ───────────────────────────────────────

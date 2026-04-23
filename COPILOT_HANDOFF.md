@@ -926,3 +926,91 @@ OnLeapTrackingData の冒頭で `Hands.Length <= 0` なら:
 ---
 
 以上。これを `COPILOT_HANDOFF.md` として根に置けば、Copilot が `@workspace` でプロジェクト全体を把握できる。
+
+---
+
+## 15. セッション引き継ぎ追記（2026-04-23 追記）
+
+この章は、今回の会話で実施した変更内容と、未解決項目（iPhone 側 ZoomView 表示）を再開しやすくするための追加メモ。
+
+### 15-1. 今回 C++ で追加・変更した内容
+
+#### A) スタイリッシュランク（コンボ）基盤
+- `ATomatinaGameMode` にランク `C/B/A/S/SSS`、ゲージ、コンボ、汚れ占有率連動減衰を追加
+- 高得点連続撮影でゲージ加算、失敗や汚れ過多で減衰
+- BP イベント追加
+  - `OnStylishRankChanged(EStylishRank NewRank, EStylishRank OldRank, bool bRankUp)`
+  - `OnHighStylishShot(ATomatinaTargetBase* Target, EStylishRank Rank, int32 ShotScore)`
+
+#### B) HUD のスタイリッシュ表示 API
+- `ATomatinaHUD::UpdateStylishDisplay(...)` を追加
+- `WBP_MissionDisplay` 内の下記名前を参照して更新
+  - `TXT_StylishRank`
+  - `TXT_StylishCombo`
+  - `PB_StylishGauge`
+- 起動時に名前チェックする `ValidateMissionStylishWidgets()` も追加
+
+#### C) 特殊トマト（黄色粘着）
+- `ATomatoDirtManager` に `EDirtType` と粘着仕様を追加
+  - `StickyYellowDash` は連続ダッシュ拭き回数（デフォ 4）達成まで残る
+  - しきい値: `StickyDashMinAmount`, `StickyDashMinMoveDistance`, `StickyDashMaxInterval`
+- `ATomatinaProjectile` に命中バリエーション追加
+  - `ETomatoImpactVariant { NormalRed, StickyYellow }`
+  - `StickyYellowChance` で発生率制御
+
+#### D) ターゲットごとの撮影点調整
+- `ATomatinaTargetBase` に個別スコア設定を追加
+  - `FullBodyScore`, `UpperBodyScore`, `LowerBodyScore`
+  - `PhotoScoreMultiplier`, `PhotoScoreFlatBonus`
+  - `HighRankBonusScore`
+- `UTomatinaFunctionLibrary::CalculatePhotoScore()` で個別値を使用するよう変更
+
+### 15-2. iPhone 側 ZoomView バグ対応（今回の主題）
+
+症状:
+- テストモード OFF 時に iPhone 側へズーム映像が出ず、メイン画面が拡張されて見える
+
+実施した対策（C++）:
+1. `WBP_ViewFinder` に対して Zoom 表示マテリアルを必ずバインド
+2. iPhone 領域へ Zoom Image の位置・サイズを強制レイアウト
+   - `Pos = (MainWidth, (MainHeight - PhoneHeight)/2)`
+   - `Size = (PhoneWidth, PhoneHeight)`
+3. `IMG_ZoomView` が見つからない場合のフォールバック探索（名前に Zoom/Phone/Finder を含む `UImage`）
+4. それでも見つからない場合、`IMG_ZoomView_Runtime` を実行時生成
+5. 可能な場合は `RT_Zoom` を `UImage` へ直接バインド（マテリアル経由を回避）
+6. `SceneCapture_Zoom->TextureTarget` 未設定時に起動ログでエラー表示
+
+### 15-3. 画面サイズのデフォルト更新
+
+今回の依頼値に合わせて、デフォルトを下記へ更新済み:
+- Main: `2560 x 1600`
+- Phone: `2256 x 1179`
+
+対象:
+- `ATomatinaPlayerPawn`
+- `ATomatinaHUD`
+- `ATomatinaGameMode` のフォールバック値
+
+### 15-4. 再開時の最優先チェックリスト
+
+1. `BP_TomatinaPlayerPawn` のインスタンス値が C++ デフォルトを上書きしていないか確認
+   - `MainWidth=2560`, `MainHeight=1600`, `PhoneWidth=2256`, `PhoneHeight=1179`
+2. `SceneCapture_Zoom` の `TextureTarget` が `RT_Zoom` か確認
+3. `WBP_ViewFinder` に Zoom 用 Image が存在するか確認（推奨名 `IMG_ZoomView`）
+4. 起動ログで以下を確認
+   - 成功: `RT_Zoom を直接バインドしました`
+   - 代替: `ZoomDisplayMaterial をバインドしました（RT 未検出のため）`
+   - 失敗: `TextureTarget が未設定です` / `ZoomView 生成先 CanvasPanel が見つかりません`
+
+### 15-5. まだ直らない場合の次アクション
+
+`WBP_ViewFinder` のルート階層が Canvas 前提でない可能性がある。
+次回は以下を確認して、親スロット型別に C++ レイアウト処理を分岐実装する。
+- `IMG_ZoomView` の親が `CanvasPanel` / `Overlay` / `SizeBox` / `ScaleBox` のどれか
+- ルート Widget タイプ
+- ルートに SafeZone や DPI スケーラを噛ませていないか
+
+### 15-6. 作業ツリー注意
+
+- 今回、`Content/Chiled_BP/BP_TomatinaPlayerPawn.uasset` に既存差分が検出されている。
+- この差分は本セッションで直接編集したものではないため、次回は意図差分かどうかを先に確認すること。

@@ -3,13 +3,16 @@
 #include "TomatinaHUD.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
 #include "Components/ProgressBar.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
@@ -50,6 +53,16 @@ void ATomatinaHUD::BeginPlay()
 		bTestMode   = Pawn->bTestMode;
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
 			MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
+
+		if (!Pawn->SceneCapture_Zoom)
+		{
+			UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: Pawn.SceneCapture_Zoom が null です"));
+		}
+		else if (!Pawn->SceneCapture_Zoom->TextureTarget)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("ATomatinaHUD: SceneCapture_Zoom の TextureTarget が未設定です（RT_Zoom を割り当ててください）"));
+		}
 	}
 	else
 	{
@@ -129,53 +142,16 @@ bool ATomatinaHUD::BindZoomMaterialToWidget(UUserWidget* Widget, FName Preferred
 		return false;
 	}
 
-	if (!ZoomDisplayMaterial)
+	UImage* ZoomImage = FindOrCreateZoomImage(Widget, PreferredImageName, WidgetLabel);
+	if (!ZoomImage)
 	{
-		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::BindZoomMaterialToWidget: ZoomDisplayMaterial 未設定 (%s)"), WidgetLabel);
+		UE_LOG(LogTemp, Error,
+			TEXT("ATomatinaHUD: %s にズーム表示用 Image を確保できませんでした"),
+			WidgetLabel);
 		return false;
 	}
 
-	if (UImage* Preferred = Cast<UImage>(Widget->GetWidgetFromName(PreferredImageName)))
-	{
-		Preferred->SetBrushFromMaterial(ZoomDisplayMaterial);
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: %s.%s に ZoomDisplayMaterial を設定"), WidgetLabel, *PreferredImageName.ToString());
-		return true;
-	}
-
-	UWidgetTree* Tree = Widget->WidgetTree;
-	if (!Tree)
-	{
-		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: %s の WidgetTree が null"), WidgetLabel);
-		return false;
-	}
-
-	TArray<UWidget*> AllWidgets;
-	Tree->GetAllWidgets(AllWidgets);
-
-	for (UWidget* W : AllWidgets)
-	{
-		UImage* Img = Cast<UImage>(W);
-		if (!Img) { continue; }
-
-		const FString N = Img->GetName();
-		const bool bLooksLikeZoomTarget =
-			N.Contains(TEXT("Zoom"), ESearchCase::IgnoreCase)
-			|| N.Contains(TEXT("Phone"), ESearchCase::IgnoreCase)
-			|| N.Contains(TEXT("Finder"), ESearchCase::IgnoreCase);
-
-		if (!bLooksLikeZoomTarget) { continue; }
-
-		Img->SetBrushFromMaterial(ZoomDisplayMaterial);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: %s の候補 Image '%s' に ZoomDisplayMaterial を設定（フォールバック）"),
-			WidgetLabel, *N);
-		return true;
-	}
-
-	UE_LOG(LogTemp, Error,
-		TEXT("ATomatinaHUD: %s にズーム表示用 Image が見つかりません。推奨名は %s"),
-		WidgetLabel, *PreferredImageName.ToString());
-	return false;
+	return ConfigureZoomImageContent(ZoomImage, WidgetLabel);
 }
 
 // =============================================================================
@@ -188,32 +164,7 @@ void ATomatinaHUD::LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImag
 		return;
 	}
 
-	UImage* TargetImage = Cast<UImage>(Widget->GetWidgetFromName(PreferredImageName));
-	if (!TargetImage)
-	{
-		UWidgetTree* Tree = Widget->WidgetTree;
-		if (!Tree)
-		{
-			return;
-		}
-
-		TArray<UWidget*> AllWidgets;
-		Tree->GetAllWidgets(AllWidgets);
-		for (UWidget* W : AllWidgets)
-		{
-			UImage* Img = Cast<UImage>(W);
-			if (!Img) { continue; }
-
-			const FString N = Img->GetName();
-			if (N.Contains(TEXT("Zoom"), ESearchCase::IgnoreCase)
-				|| N.Contains(TEXT("Phone"), ESearchCase::IgnoreCase)
-				|| N.Contains(TEXT("Finder"), ESearchCase::IgnoreCase))
-			{
-				TargetImage = Img;
-				break;
-			}
-		}
-	}
+	UImage* TargetImage = FindOrCreateZoomImage(Widget, PreferredImageName, WidgetLabel);
 
 	if (!TargetImage)
 	{
@@ -227,18 +178,150 @@ void ATomatinaHUD::LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImag
 		return;
 	}
 
-	// メイン右隣に iPhone 描画領域を配置。高さが足りない場合は中央寄せ。
-	const float PhoneX = MainWidth;
-	const float PhoneY = FMath::Max(0.f, (MainHeight - PhoneHeight) * 0.5f);
+	// メイン右隣に iPhone 描画領域を配置。
+	// スマホ実機を繋いだときの Windows 拡張デスクトップでは、スマホは Y=0 から始まる
+	// (メインと上辺を揃える配置が前提) ため、Y を中央寄せにすると下にズレてスマホ外に
+	// 押し出され、主ビューが透けて見える症状になる。必ず Y=0 に top-align する。
+	//
+	// CanvasPanelSlot の座標は "widget-space" (DPI スケール適用前)。
+	// 実ピクセル位置 = widget-space × DPIScale なので、ここではピクセル値を
+	// DPIScale で割って widget-space に変換してから渡す必要がある。これを怠ると
+	// 縦 1600 viewport で DPI≈1.48 倍に引き延ばされ、ZoomView が viewport 外へ
+	// 飛び出しスマホに描画されなくなる。
+	const float DPIScale = UWidgetLayoutLibrary::GetViewportScale(Widget);
+	const float Safe = (DPIScale > KINDA_SMALL_NUMBER) ? DPIScale : 1.f;
+
+	const float PhoneX = MainWidth / Safe;
+	const float PhoneY = 0.f;
+	const float SlotW  = PhoneWidth  / Safe;
+	const float SlotH  = PhoneHeight / Safe;
 
 	Slot->SetAutoSize(false);
 	Slot->SetPosition(FVector2D(PhoneX, PhoneY));
-	Slot->SetSize(FVector2D(PhoneWidth, PhoneHeight));
+	Slot->SetSize(FVector2D(SlotW, SlotH));
 	Slot->SetAlignment(FVector2D(0.f, 0.f));
 
 	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD: %s のズーム領域を配置 Pos=(%.0f,%.0f) Size=(%.0f,%.0f)"),
-		WidgetLabel, PhoneX, PhoneY, PhoneWidth, PhoneHeight);
+		TEXT("ATomatinaHUD: %s のズーム領域を配置 DPI=%.3f 画面ピクセル=(%.0f,%.0f)+(%.0f,%.0f) widget-space=(%.0f,%.0f)+(%.0f,%.0f)"),
+		WidgetLabel, Safe,
+		MainWidth, 0.f, PhoneWidth, PhoneHeight,
+		PhoneX, PhoneY, SlotW, SlotH);
+}
+
+// =============================================================================
+// FindOrCreateZoomImage
+// =============================================================================
+UImage* ATomatinaHUD::FindOrCreateZoomImage(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel)
+{
+	if (!Widget) { return nullptr; }
+
+	if (UImage* Preferred = Cast<UImage>(Widget->GetWidgetFromName(PreferredImageName)))
+	{
+		return Preferred;
+	}
+
+	UWidgetTree* Tree = Widget->WidgetTree;
+	if (!Tree)
+	{
+		return nullptr;
+	}
+
+	TArray<UWidget*> AllWidgets;
+	Tree->GetAllWidgets(AllWidgets);
+
+	for (UWidget* W : AllWidgets)
+	{
+		UImage* Img = Cast<UImage>(W);
+		if (!Img) { continue; }
+
+		const FString N = Img->GetName();
+		if (N.Contains(TEXT("Zoom"), ESearchCase::IgnoreCase)
+			|| N.Contains(TEXT("Phone"), ESearchCase::IgnoreCase)
+			|| N.Contains(TEXT("Finder"), ESearchCase::IgnoreCase))
+		{
+			return Img;
+		}
+	}
+
+	// どこにも無い場合は CanvasPanel に実行時生成して強制的に表示先を作る
+	UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(Tree->RootWidget);
+	if (!RootCanvas)
+	{
+		for (UWidget* W : AllWidgets)
+		{
+			RootCanvas = Cast<UCanvasPanel>(W);
+			if (RootCanvas) { break; }
+		}
+	}
+
+	if (!RootCanvas)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("ATomatinaHUD: %s で ZoomView 生成先 CanvasPanel が見つかりません"),
+			WidgetLabel);
+		return nullptr;
+	}
+
+	UImage* RuntimeZoomImage = Tree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("IMG_ZoomView_Runtime"));
+	if (!RuntimeZoomImage)
+	{
+		return nullptr;
+	}
+
+	if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(RuntimeZoomImage))
+	{
+		Slot->SetAutoSize(false);
+		Slot->SetAlignment(FVector2D(0.f, 0.f));
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD: %s に IMG_ZoomView_Runtime を実行時生成しました"),
+		WidgetLabel);
+
+	return RuntimeZoomImage;
+}
+
+// =============================================================================
+// ConfigureZoomImageContent
+// =============================================================================
+bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* WidgetLabel)
+{
+	if (!ImageWidget)
+	{
+		return false;
+	}
+
+	APlayerController* PC = GetOwningPlayerController();
+	ATomatinaPlayerPawn* Pawn = PC ? Cast<ATomatinaPlayerPawn>(PC->GetPawn()) : nullptr;
+	UTextureRenderTarget2D* ZoomRT = (Pawn && Pawn->SceneCapture_Zoom)
+		? Pawn->SceneCapture_Zoom->TextureTarget
+		: nullptr;
+
+	if (ZoomRT)
+	{
+		FSlateBrush Brush = ImageWidget->GetBrush();
+		Brush.SetResourceObject(ZoomRT);
+		ImageWidget->SetBrush(Brush);
+		ImageWidget->SetColorAndOpacity(FLinearColor::White);
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s に RT_Zoom を直接バインドしました"),
+			WidgetLabel);
+		return true;
+	}
+
+	if (ZoomDisplayMaterial)
+	{
+		ImageWidget->SetBrushFromMaterial(ZoomDisplayMaterial);
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial をバインドしました（RT 未検出のため）"),
+			WidgetLabel);
+		return true;
+	}
+
+	UE_LOG(LogTemp, Error,
+		TEXT("ATomatinaHUD: %s の ZoomView に RT/Material のどちらも設定できません"),
+		WidgetLabel);
+	return false;
 }
 
 // =============================================================================

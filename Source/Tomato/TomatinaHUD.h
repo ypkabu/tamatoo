@@ -105,7 +105,7 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
-	float PhoneWidth = 2256.f;
+	float PhoneWidth = 2556.f;
 
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
 	float PhoneHeight = 1179.f;
@@ -253,4 +253,10 @@ private:
 
 	/** iPhone 領域に合わせてズーム表示 Image の位置とサイズを強制レイアウトする */
 	void LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel);
+
+	/** ZoomView 用 Image を Widget から探し、なければ実行時に生成する */
+	class UImage* FindOrCreateZoomImage(UUserWidget* Widget, FName PreferredImageName, const TCHAR* WidgetLabel);
+
+	/** ZoomView 用 Image に RT_Zoom（またはマテリアル）を設定する */
+	bool ConfigureZoomImageContent(class UImage* ImageWidget, const TCHAR* WidgetLabel);
 };
