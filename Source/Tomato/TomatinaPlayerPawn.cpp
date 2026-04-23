@@ -359,7 +359,11 @@ void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
 		return;
 	}
 
-	const int32 DesiredW = FMath::Max(1, FMath::RoundToInt(MainWidth + PhoneWidth));
+	// 第二ウィンドウ方式ではメインウィンドウは MainWidth × MainHeight 単独。
+	// 旧スパン方式のときのみ横に PhoneWidth を足した幅にする。
+	const int32 DesiredW = bUseSeparatePhoneWindow
+		? FMath::Max(1, FMath::RoundToInt(MainWidth))
+		: FMath::Max(1, FMath::RoundToInt(MainWidth + PhoneWidth));
 	const int32 DesiredH = FMath::Max(1, FMath::RoundToInt(MainHeight));
 
 	int32 ViewW = 0;

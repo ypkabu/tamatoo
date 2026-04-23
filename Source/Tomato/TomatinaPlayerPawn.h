@@ -49,16 +49,25 @@ public:
 	float MainHeight = 1600.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
-	float PhoneWidth = 2556.f;
+	float PhoneWidth = 2024.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
-	float PhoneHeight = 1179.f;
+	float PhoneHeight = 1152.f;
 
 	// ──────────────────────────────────────────────
 	// テストモード（iPhone なしで PiP 動作確認）
 	// ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
 	bool bTestMode = true;
+
+	// ──────────────────────────────────────────────
+	// 第二ウィンドウ方式 (スマホ側を独立 SWindow に出す)
+	//   true:  メインウィンドウ = 2560x1600 (スパンしない)
+	//          HUD が別 SWindow を (MainWidth, 0) に生成しスマホ側 UI を出す
+	//   false: 旧仕様の「1枚スパンウィンドウ」
+	// ──────────────────────────────────────────────
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Screen")
+	bool bUseSeparatePhoneWindow = true;
 
 	// ──────────────────────────────────────────────
 	// ズーム状態

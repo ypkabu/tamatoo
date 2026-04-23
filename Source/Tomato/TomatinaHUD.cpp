@@ -14,9 +14,11 @@
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "Materials/MaterialInterface.h"
 #include "Styling/SlateColor.h"
+#include "Widgets/SWindow.h"
 
 #include "TomatinaPlayerPawn.h"
 
@@ -46,13 +48,16 @@ void ATomatinaHUD::BeginPlay()
 	// ── PlayerPawn から 4 サイズと bTestMode を取得 ──
 	if (ATomatinaPlayerPawn* Pawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn()))
 	{
-		MainWidth   = Pawn->MainWidth;
-		MainHeight  = Pawn->MainHeight;
-		PhoneWidth  = Pawn->PhoneWidth;
-		PhoneHeight = Pawn->PhoneHeight;
-		bTestMode   = Pawn->bTestMode;
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
-			MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
+		MainWidth               = Pawn->MainWidth;
+		MainHeight              = Pawn->MainHeight;
+		PhoneWidth              = Pawn->PhoneWidth;
+		PhoneHeight             = Pawn->PhoneHeight;
+		bTestMode               = Pawn->bTestMode;
+		bUseSeparatePhoneWindow = Pawn->bUseSeparatePhoneWindow;
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d bUseSeparatePhoneWindow=%d"),
+			MainWidth, MainHeight, PhoneWidth, PhoneHeight,
+			bTestMode ? 1 : 0, bUseSeparatePhoneWindow ? 1 : 0);
 
 		if (!Pawn->SceneCapture_Zoom)
 		{
@@ -69,18 +74,21 @@ void ATomatinaHUD::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: PlayerPawn 取得失敗（デフォルト値使用）"));
 	}
 
-	// ── ViewFinder ─────────────────────────────
-	if (ViewFinderWidgetClass)
+	// ── ViewFinder (旧・スパンウィンドウ方式のときだけメインに追加) ──
+	if (!bUseSeparatePhoneWindow)
 	{
-		ViewFinderWidget = CreateWidget<UUserWidget>(PC, ViewFinderWidgetClass);
-		if (ViewFinderWidget)
+		if (ViewFinderWidgetClass)
 		{
-			ViewFinderWidget->AddToViewport(100);
-			BindZoomMaterialToWidget(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
-			LayoutPhoneZoomImage(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
+			ViewFinderWidget = CreateWidget<UUserWidget>(PC, ViewFinderWidgetClass);
+			if (ViewFinderWidget)
+			{
+				ViewFinderWidget->AddToViewport(100);
+				BindZoomMaterialToWidget(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
+				LayoutPhoneZoomImage(ViewFinderWidget, TEXT("IMG_ZoomView"), TEXT("ViewFinder"));
+			}
 		}
+		else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: ViewFinderWidgetClass 未設定")); }
 	}
-	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: ViewFinderWidgetClass 未設定")); }
 
 	// ── DirtOverlay ─────────────────────────────
 	if (DirtOverlayWidgetClass)
@@ -115,8 +123,8 @@ void ATomatinaHUD::BeginPlay()
 	}
 	else { UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD: MissionDisplayWidgetClass 未設定")); }
 
-	// ── TestPip（開発用） ─────────────────────────────
-	if (bTestMode && TestPipWidgetClass)
+	// ── TestPip（開発用・スパン方式のみ） ─────────────────────────────
+	if (!bUseSeparatePhoneWindow && bTestMode && TestPipWidgetClass)
 	{
 		TestPipWidget = CreateWidget<UUserWidget>(PC, TestPipWidgetClass);
 		if (TestPipWidget)
@@ -128,7 +136,103 @@ void ATomatinaHUD::BeginPlay()
 		}
 	}
 
+	// ── 第二ウィンドウ方式：スマホ側独立 SWindow を生成 ─────────────────
+	if (bUseSeparatePhoneWindow)
+	{
+		CreatePhoneWindow();
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 完了"));
+}
+
+// =============================================================================
+// EndPlay — 第二ウィンドウのクリーンアップ
+// =============================================================================
+void ATomatinaHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DestroyPhoneWindow();
+	Super::EndPlay(EndPlayReason);
+}
+
+// =============================================================================
+// CreatePhoneWindow — スマホ側を独立 SWindow として生成し UMG を貼る
+// =============================================================================
+void ATomatinaHUD::CreatePhoneWindow()
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::CreatePhoneWindow: Slate 未初期化"));
+		return;
+	}
+
+	if (!PhoneViewWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::CreatePhoneWindow: PhoneViewWidgetClass 未設定 (BP_TomatinaHUD で WBP_PhoneView をセットしてください)"));
+		return;
+	}
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::CreatePhoneWindow: PlayerController 取得失敗"));
+		return;
+	}
+
+	PhoneViewWidget = CreateWidget<UUserWidget>(PC, PhoneViewWidgetClass);
+	if (!PhoneViewWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ATomatinaHUD::CreatePhoneWindow: PhoneViewWidget 生成失敗"));
+		return;
+	}
+
+	BindZoomMaterialToWidget(PhoneViewWidget, TEXT("IMG_ZoomView"), TEXT("PhoneView"));
+
+	const FVector2D ScreenPos(MainWidth, 0.f);
+	const FVector2D ClientSize(PhoneWidth, PhoneHeight);
+
+	TSharedRef<SWindow> NewWindow = SNew(SWindow)
+		.Type(EWindowType::GameWindow)
+		.Title(FText::FromString(TEXT("Tomatina Phone")))
+		.CreateTitleBar(false)
+		.HasCloseButton(false)
+		.SupportsMaximize(false)
+		.SupportsMinimize(false)
+		.UseOSWindowBorder(false)
+		.FocusWhenFirstShown(false)
+		.ActivationPolicy(EWindowActivationPolicy::Never)
+		.SizingRule(ESizingRule::UserSized)
+		.ScreenPosition(ScreenPos)
+		.ClientSize(ClientSize);
+
+	FSlateApplication::Get().AddWindow(NewWindow, true);
+	PhoneWindow = NewWindow;
+
+	// UMG 側を Slate ツリーにアタッチ
+	PhoneWindow->SetContent(PhoneViewWidget->TakeWidget());
+
+	// AddWindow 直後は ScreenPosition が反映されないケースがあるので明示的に移動
+	PhoneWindow->MoveWindowTo(ScreenPos);
+	PhoneWindow->Resize(ClientSize);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaHUD: 第二ウィンドウ(Phone) 生成 Pos=(%.0f,%.0f) Size=(%.0fx%.0f)"),
+		ScreenPos.X, ScreenPos.Y, ClientSize.X, ClientSize.Y);
+}
+
+// =============================================================================
+// DestroyPhoneWindow — 第二ウィンドウ破棄
+// =============================================================================
+void ATomatinaHUD::DestroyPhoneWindow()
+{
+	if (PhoneWindow.IsValid())
+	{
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().RequestDestroyWindow(PhoneWindow.ToSharedRef());
+		}
+		PhoneWindow.Reset();
+	}
+	PhoneViewWidget = nullptr;
 }
 
 // =============================================================================
@@ -384,6 +488,24 @@ void ATomatinaHUD::Tick(float DeltaSeconds)
 // =============================================================================
 void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 {
+	const float NormX = (MainWidth  > 0.f) ? Pos.X / MainWidth  : 0.f;
+	const float NormY = (MainHeight > 0.f) ? Pos.Y / MainHeight : 0.f;
+
+	if (bUseSeparatePhoneWindow && PhoneViewWidget)
+	{
+		// 第二ウィンドウ方式：スマホウィンドウ内ローカル座標 (0..PhoneWidth, 0..PhoneHeight)
+		UImage* PhoneCrosshair = Cast<UImage>(
+			PhoneViewWidget->GetWidgetFromName(TEXT("IMG_PhoneCursor")));
+		if (!PhoneCrosshair) { return; }
+
+		UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(PhoneCrosshair->Slot);
+		if (!Slot) { return; }
+
+		Slot->SetPosition(FVector2D(NormX * PhoneWidth, NormY * PhoneHeight));
+		return;
+	}
+
+	// 旧・スパンウィンドウ方式：メインウィンドウ内 (MainWidth 以降) に配置
 	if (!CursorWidget) { return; }
 
 	UImage* Crosshair = Cast<UImage>(CursorWidget->GetWidgetFromName(TEXT("IMG_Crosshair")));
@@ -392,8 +514,6 @@ void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Crosshair->Slot);
 	if (!Slot) { return; }
 
-	const float NormX  = (MainWidth  > 0.f) ? Pos.X / MainWidth  : 0.f;
-	const float NormY  = (MainHeight > 0.f) ? Pos.Y / MainHeight : 0.f;
 	const float PhoneX = MainWidth + NormX * PhoneWidth;
 	const float PhoneY = NormY * PhoneHeight;
 	Slot->SetPosition(FVector2D(PhoneX, PhoneY));
@@ -405,12 +525,34 @@ void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 void ATomatinaHUD::ShowCursor()
 {
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor"));
+
+	if (bUseSeparatePhoneWindow && PhoneViewWidget)
+	{
+		if (UImage* PhoneCrosshair = Cast<UImage>(
+				PhoneViewWidget->GetWidgetFromName(TEXT("IMG_PhoneCursor"))))
+		{
+			PhoneCrosshair->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		return;
+	}
+
 	if (CursorWidget) { CursorWidget->SetVisibility(ESlateVisibility::Visible); }
 }
 
 void ATomatinaHUD::HideCursor()
 {
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor"));
+
+	if (bUseSeparatePhoneWindow && PhoneViewWidget)
+	{
+		if (UImage* PhoneCrosshair = Cast<UImage>(
+				PhoneViewWidget->GetWidgetFromName(TEXT("IMG_PhoneCursor"))))
+		{
+			PhoneCrosshair->SetVisibility(ESlateVisibility::Hidden);
+		}
+		return;
+	}
+
 	if (CursorWidget) { CursorWidget->SetVisibility(ESlateVisibility::Hidden); }
 }
 
@@ -790,21 +932,39 @@ void ATomatinaHUD::PlayShutterFlash()
 // =============================================================================
 void ATomatinaHUD::UpdateDirtDisplay(const TArray<FDirtSplat>& Dirts)
 {
-	if (!DirtOverlayWidget) { return; }
+	// ── メインウィンドウ側 ─────────────────────────────
+	if (DirtOverlayWidget)
+	{
+		if (UCanvasPanel* Container = Cast<UCanvasPanel>(
+				DirtOverlayWidget->GetWidgetFromName(TEXT("SplatContainer"))))
+		{
+			Container->ClearChildren();
 
-	UCanvasPanel* Container = Cast<UCanvasPanel>(
-		DirtOverlayWidget->GetWidgetFromName(TEXT("SplatContainer")));
-	if (!Container) { return; }
+			// メインモニター領域 [0, MainWidth] × [0, MainHeight]
+			AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
+				MainWidth, MainHeight, 0.f, 0.f);
 
-	Container->ClearChildren();
+			// 旧スパンウィンドウ方式でのみスマホ側もここに乗せる
+			if (!bUseSeparatePhoneWindow)
+			{
+				AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
+					PhoneWidth, PhoneHeight, MainWidth, 0.f);
+			}
+		}
+	}
 
-	// メインモニター側（領域 [0, MainWidth] × [0, MainHeight]）
-	AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
-		MainWidth, MainHeight, 0.f, 0.f);
-
-	// iPhone 側（領域 [MainWidth, MainWidth+PhoneWidth] × [0, PhoneHeight]）
-	AddDirtSplatsToCanvas(DirtOverlayWidget, Container, Dirts,
-		PhoneWidth, PhoneHeight, MainWidth, 0.f);
+	// ── 第二ウィンドウ (Phone) 側 ─────────────────────────────
+	// スマホ側は独立 Widget 内の PhoneSplatContainer に原点 (0,0) で配置
+	if (bUseSeparatePhoneWindow && PhoneViewWidget)
+	{
+		if (UCanvasPanel* PhoneContainer = Cast<UCanvasPanel>(
+				PhoneViewWidget->GetWidgetFromName(TEXT("PhoneSplatContainer"))))
+		{
+			PhoneContainer->ClearChildren();
+			AddDirtSplatsToCanvas(PhoneViewWidget, PhoneContainer, Dirts,
+				PhoneWidth, PhoneHeight, 0.f, 0.f);
+		}
+	}
 }
 
 // =============================================================================
