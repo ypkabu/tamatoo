@@ -8,6 +8,7 @@
 
 class UStaticMeshComponent;
 class ATomatoDirtManager;
+class USoundBase;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 飛行パターン
@@ -121,6 +122,30 @@ public:
 	/** デカールの寿命（秒）。0 以下 = 永続 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|WorldDecal")
 	float WorldDecalLifetime = 0.f;
+
+	// =========================================================================
+	// 着弾サウンド
+	// =========================================================================
+
+	/** カメラ命中時（プレイヤーがトマトを浴びる）に鳴らす SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Audio")
+	USoundBase* ImpactSoundCamera = nullptr;
+
+	/** ワールド（壁・床など）命中時に鳴らす SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Audio")
+	USoundBase* ImpactSoundWorld = nullptr;
+
+	/** 黄色粘着トマトがカメラに命中したときに鳴らす SE（未設定なら ImpactSoundCamera を使用） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Audio")
+	USoundBase* ImpactSoundSticky = nullptr;
+
+	/** 着弾 SE の音量倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Audio", meta=(ClampMin="0.0", ClampMax="4.0"))
+	float ImpactSoundVolume = 1.0f;
+
+	/** 着弾 SE のピッチ倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Audio", meta=(ClampMin="0.1", ClampMax="4.0"))
+	float ImpactSoundPitch = 1.0f;
 
 	// =========================================================================
 	// 初期化
