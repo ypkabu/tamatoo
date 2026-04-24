@@ -7,6 +7,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Sound/SoundBase.h"
 
 #include "TomatoDirtManager.h"
 #include "TomatinaPlayerPawn.h"
@@ -213,7 +214,21 @@ void ATomatinaProjectile::OnHitCamera()
 		TEXT("ATomatinaProjectile::OnHitCamera: variant=%d pos=(%.2f,%.2f) size=%.3f"),
 		static_cast<int32>(ImpactVariant), SplatPos.X, SplatPos.Y, SplatSize);
 
-	// 着弾エフェクト・SE は BP 派生クラスで BlueprintNativeEvent として追加可能
+	// 着弾 SE（カメラ命中は 2D で一定音量のほうが気持ちいいので PlaySound2D）
+	USoundBase* HitSound = nullptr;
+	if (ImpactVariant == ETomatoImpactVariant::StickyYellow && ImpactSoundSticky)
+	{
+		HitSound = ImpactSoundSticky;
+	}
+	else
+	{
+		HitSound = ImpactSoundCamera;
+	}
+
+	if (HitSound)
+	{
+		UGameplayStatics::PlaySound2D(this, HitSound, ImpactSoundVolume, ImpactSoundPitch);
+	}
 }
 
 // =============================================================================
@@ -222,6 +237,14 @@ void ATomatinaProjectile::OnHitCamera()
 
 void ATomatinaProjectile::OnHitWorld(UPrimitiveComponent* HitComp, const FHitResult& Hit)
 {
+	// 着弾 SE（壁・床に当たった位置で 3D 再生）
+	if (ImpactSoundWorld)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			this, ImpactSoundWorld, Hit.ImpactPoint,
+			ImpactSoundVolume, ImpactSoundPitch);
+	}
+
 	if (!WorldDecalMaterial)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ATomatinaProjectile::OnHitWorld: WorldDecalMaterial 未設定"));
