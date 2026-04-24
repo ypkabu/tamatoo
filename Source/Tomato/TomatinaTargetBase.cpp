@@ -140,6 +140,28 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 	case ETargetMovement::FloatErratic:     TickFloatErratic(DeltaTime);     break;
 	case ETargetMovement::BlendWithCrowd:   TickBlendWithCrowd(DeltaTime);   break;
 	}
+
+	// ── 進行方向に体を向ける（全パターン共通） ─────────────────────────────
+	if (bFaceMovementDirection)
+	{
+		const FVector CurLoc = GetActorLocation();
+		if (bHasLastLocation)
+		{
+			FVector Delta = CurLoc - LastFrameLocation;
+			Delta.Z = 0.f;
+			// 1 cm 以上動いたフレームのみ向きを更新（ジッタ防止）
+			if (Delta.SizeSquared() > 1.f)
+			{
+				FRotator Look = Delta.Rotation();
+				Look.Pitch = 0.f;
+				Look.Roll  = 0.f;
+				Look.Yaw  += MeshYawOffset;
+				SetActorRotation(Look);
+			}
+		}
+		LastFrameLocation = CurLoc;
+		bHasLastLocation  = true;
+	}
 }
 
 // =============================================================================

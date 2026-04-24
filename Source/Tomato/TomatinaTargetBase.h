@@ -143,6 +143,14 @@ public:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float StartDelay = 0.0f;
 
+	/** 移動中、進行方向に体を向ける（全 MovementType 共通） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	bool bFaceMovementDirection = true;
+
+	/** メッシュ natural forward が +X でない場合の Yaw 補正（度） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float MeshYawOffset = 0.f;
+
 	/** ターゲットが出現した瞬間（StartDelay 終了）に鳴らす SE */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Audio")
 	FTomatinaSoundCue SpawnAppearSound;
@@ -294,6 +302,10 @@ public:
 private:
 	// ── 内部状態 ─────────────────────────────────────────────────────────────
 	FVector OriginLocation;
+
+	/** 進行方向算出用：前フレームの位置 */
+	FVector LastFrameLocation = FVector::ZeroVector;
+	bool    bHasLastLocation  = false;
 
 	float StateTimer    = 0.f;
 	bool  bIsShowing    = false;  // DepthHideAndSeek
