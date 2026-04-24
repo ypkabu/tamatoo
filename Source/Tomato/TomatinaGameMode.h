@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "TomatinaSoundCue.h"         // FTomatinaSoundCue
 #include "TomatinaTargetBase.h"
 #include "TomatinaGameMode.generated.h"
 
@@ -139,6 +140,27 @@ public:
 	/** 撮影後のファンファーレ（写真スコア別）。MinScore 降順で最初に一致したものを再生 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
 	TArray<FFanfareTier> FanfareTiers;
+
+	// ── 追加 SE（すべて任意設定。未設定なら無音） ────────────────
+	/** カウントダウン各秒（3, 2, 1）の 1 秒刻みで鳴らす SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Countdown")
+	FTomatinaSoundCue CountdownTickSound;
+
+	/** カウントダウン 0 秒の瞬間（スタート！）SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Countdown")
+	FTomatinaSoundCue CountdownGoSound;
+
+	/** ミッション開始時 SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Mission")
+	FTomatinaSoundCue MissionStartSound;
+
+	/** 時間切れ SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Mission")
+	FTomatinaSoundCue TimeUpSound;
+
+	/** 最終リザルト溜め開始時 SE（ジャン！系推奨） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Result")
+	FTomatinaSoundCue FinalBuildupSound;
 
 	// ── リザルト表示時間 ──────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")

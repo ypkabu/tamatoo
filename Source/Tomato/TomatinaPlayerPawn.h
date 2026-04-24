@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/DefaultPawn.h"
 #include "InputActionValue.h"
+#include "TomatinaSoundCue.h"  // FTomatinaSoundCue
 #include "TomatinaPlayerPawn.generated.h"
 
 class UCameraComponent;
@@ -122,6 +123,14 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
+
+	/** ズーム開始時（右クリックでズーム確定した瞬間）の SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom|Audio")
+	FTomatinaSoundCue ZoomInSound;
+
+	/** ズーム解除時の SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom|Audio")
+	FTomatinaSoundCue ZoomOutSound;
 
 	// ──────────────────────────────────────────────
 	// Enhanced Input

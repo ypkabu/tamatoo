@@ -4,6 +4,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
+#include "TomatinaFunctionLibrary.h"
 
 // =============================================================================
 // コンストラクタ
@@ -116,6 +117,10 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 			bActive = true;
 			if (MeshComp) { MeshComp->SetVisibility(true); }
 			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: Delay 終了・アクティブ化"), *GetName());
+
+			// 出現 SE（ターゲット位置から 3D 再生）
+			UTomatinaFunctionLibrary::PlayTomatinaCueAtLocation(
+				this, SpawnAppearSound, GetActorLocation());
 		}
 		return;
 	}

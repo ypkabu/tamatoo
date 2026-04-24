@@ -14,6 +14,15 @@ ATomatinaCrowdMember::ATomatinaCrowdMember()
 
 	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
 	SetRootComponent(MeshComp);
+
+	// 撮影スコア判定の LineTrace（ECC_Visibility）に群衆が引っかかるように、
+	// SkeletalMesh を QueryOnly + Visibility=Block で設定する。
+	// これにより BP 側で Collision Profile を忘れていても遮蔽判定が機能する。
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	MeshComp->SetCollisionObjectType(ECC_WorldDynamic);
+	MeshComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+	MeshComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	MeshComp->SetGenerateOverlapEvents(false);
 }
 
 // =============================================================================
@@ -23,6 +32,10 @@ ATomatinaCrowdMember::ATomatinaCrowdMember()
 void ATomatinaCrowdMember::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 遮蔽判定で二重保険として HidingProp タグを付与
+	// （CheckVisibility 側で HidingProp Actor は遮蔽とみなされる）
+	Tags.AddUnique(TEXT("HidingProp"));
 
 	// バラけ用：開始時に少しランダム待機
 	StartJitterTimer = FMath::FRandRange(0.f, MaxStartJitter);
@@ -196,10 +209,11 @@ void ATomatinaCrowdMember::TickMovement(float DeltaTime)
 		Dir = (Dir + Jitter * 0.01f).GetSafeNormal2D();
 	}
 
-	// 進行方向へ向く
+	// 進行方向へ向く（メッシュ natural forward が +X でない場合 MeshYawOffset で補正）
 	FRotator Look = Dir.Rotation();
 	Look.Pitch = 0.f;
 	Look.Roll  = 0.f;
+	Look.Yaw  += MeshYawOffset;
 	SetActorRotation(Look);
 
 	SetActorLocation(Cur + Dir * CurrentSpeed * DeltaTime, /*bSweep=*/false);

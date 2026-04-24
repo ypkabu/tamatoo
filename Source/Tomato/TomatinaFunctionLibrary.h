@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "TomatinaSoundCue.h"     // FTomatinaSoundCue
 #include "TomatinaTargetBase.h"
 #include "TomatinaFunctionLibrary.generated.h"
 
@@ -11,6 +12,7 @@ class APlayerController;
 class USceneCaptureComponent2D;
 class UCameraComponent;
 class UTextureRenderTarget2D;
+class USoundBase;
 
 USTRUCT(BlueprintType)
 struct FPhotoResult
@@ -73,4 +75,17 @@ public:
 	static void CopyZoomToPhoto(
 		USceneCaptureComponent2D* ZoomCamera,
 		UTextureRenderTarget2D* PhotoTarget);
+
+	/** FTomatinaSoundCue を 2D 再生（遅延・音量・ピッチ対応） */
+	UFUNCTION(BlueprintCallable, Category="Tomatina|Audio", meta=(WorldContext="WorldContextObject"))
+	static void PlayTomatinaCue2D(
+		const UObject* WorldContextObject,
+		const FTomatinaSoundCue& Cue);
+
+	/** FTomatinaSoundCue を指定ワールド座標で 3D 再生（遅延・音量・ピッチ対応） */
+	UFUNCTION(BlueprintCallable, Category="Tomatina|Audio", meta=(WorldContext="WorldContextObject"))
+	static void PlayTomatinaCueAtLocation(
+		const UObject* WorldContextObject,
+		const FTomatinaSoundCue& Cue,
+		FVector Location);
 };

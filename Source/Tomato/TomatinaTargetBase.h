@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "TomatinaSoundCue.h"  // FTomatinaSoundCue
 #include "TomatinaTargetBase.generated.h"
 
 class UWidgetComponent;
@@ -141,6 +142,10 @@ public:
 	/** 出現までの待機秒数（レベル配置時のタイミングをバラけさせる） */
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float StartDelay = 0.0f;
+
+	/** ターゲットが出現した瞬間（StartDelay 終了）に鳴らす SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Audio")
+	FTomatinaSoundCue SpawnAppearSound;
 
 	// =========================================================================
 	// DepthHideAndSeek 用

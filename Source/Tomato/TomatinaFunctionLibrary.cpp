@@ -9,6 +9,9 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "TimerManager.h"
 
 #include "TomatinaTargetBase.h"
 
@@ -299,4 +302,81 @@ void UTomatinaFunctionLibrary::CopyZoomToPhoto(
 	ZoomCamera->TextureTarget = PhotoTarget;
 	ZoomCamera->CaptureScene();
 	ZoomCamera->TextureTarget = Original;
+}
+
+// -----------------------------------------------------------------------------
+// PlayTomatinaCue2D — 共通 SE 再生（2D）
+// -----------------------------------------------------------------------------
+void UTomatinaFunctionLibrary::PlayTomatinaCue2D(
+	const UObject* WorldContextObject,
+	const FTomatinaSoundCue& Cue)
+{
+	if (!Cue.Sound || !WorldContextObject) { return; }
+
+	if (Cue.DelaySeconds <= 0.f)
+	{
+		UGameplayStatics::PlaySound2D(WorldContextObject, Cue.Sound, Cue.Volume, Cue.Pitch);
+		return;
+	}
+
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull)
+		: nullptr;
+	if (!World) { return; }
+
+	TWeakObjectPtr<const UObject> Ctx(WorldContextObject);
+	USoundBase* S = Cue.Sound;
+	const float V = Cue.Volume;
+	const float P = Cue.Pitch;
+
+	FTimerHandle TimerHandle;
+	FTimerDelegate TimerDel;
+	TimerDel.BindLambda([Ctx, S, V, P]()
+	{
+		if (Ctx.IsValid())
+		{
+			UGameplayStatics::PlaySound2D(Ctx.Get(), S, V, P);
+		}
+	});
+	World->GetTimerManager().SetTimer(TimerHandle, TimerDel, Cue.DelaySeconds, false);
+}
+
+// -----------------------------------------------------------------------------
+// PlayTomatinaCueAtLocation — 共通 SE 再生（3D 位置指定）
+// -----------------------------------------------------------------------------
+void UTomatinaFunctionLibrary::PlayTomatinaCueAtLocation(
+	const UObject* WorldContextObject,
+	const FTomatinaSoundCue& Cue,
+	FVector Location)
+{
+	if (!Cue.Sound || !WorldContextObject) { return; }
+
+	if (Cue.DelaySeconds <= 0.f)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			WorldContextObject, Cue.Sound, Location, Cue.Volume, Cue.Pitch);
+		return;
+	}
+
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull)
+		: nullptr;
+	if (!World) { return; }
+
+	TWeakObjectPtr<const UObject> Ctx(WorldContextObject);
+	USoundBase* S = Cue.Sound;
+	const float V = Cue.Volume;
+	const float P = Cue.Pitch;
+	const FVector Loc = Location;
+
+	FTimerHandle TimerHandle;
+	FTimerDelegate TimerDel;
+	TimerDel.BindLambda([Ctx, S, V, P, Loc]()
+	{
+		if (Ctx.IsValid())
+		{
+			UGameplayStatics::PlaySoundAtLocation(Ctx.Get(), S, Loc, V, P);
+		}
+	});
+	World->GetTimerManager().SetTimer(TimerHandle, TimerDel, Cue.DelaySeconds, false);
 }

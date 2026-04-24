@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TomatinaSoundCue.h"     // FTomatinaSoundCue
 #include "TomatinaProjectile.h"   // ETomatoTrajectory
 #include "TomatinaThrower.generated.h"
 
@@ -135,6 +136,18 @@ public:
 	/** ランダム散布の高さオフセット（cm）。負の値で下方向 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Throw", meta=(EditCondition="bUseRandomScatter"))
 	float RandomScatterHeightRange = 200.f;
+
+	// =========================================================================
+	// サウンド
+	// =========================================================================
+
+	/** 投擲モーション開始時の SE（かけ声・うなり声等。Thrower 位置で 3D 再生） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Audio")
+	FTomatinaSoundCue ThrowStartSound;
+
+	/** トマトリリース（手から離れる）瞬間の SE（スウッ系。Thrower 位置で 3D 再生） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Audio")
+	FTomatinaSoundCue ThrowReleaseSound;
 
 	// =========================================================================
 	// API
