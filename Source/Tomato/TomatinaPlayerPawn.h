@@ -121,6 +121,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float ZoomNearClippingPlane = 20.f;
 
+	/** 虚空（空）をクリックしたときに仮想ヒット位置として使う距離 (cm)。
+	 *  これにより空にいる鳥等にもズームして撮影できる。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
+	float SkyFallbackDistance = 3000.f;
+
 	UPROPERTY(BlueprintReadOnly, Category="Zoom")
 	FVector TargetOffset = FVector::ZeroVector;
 
