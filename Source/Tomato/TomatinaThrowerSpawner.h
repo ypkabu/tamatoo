@@ -109,6 +109,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Tempo")
 	int32 MaxThrowers = 8;
 
+	/**
+	 * true にすると開始から FrontLoadWindowSeconds 秒以内に MaxThrowers 体を
+	 * 均等間隔で全員スポーンし、以降はスポーンしない。
+	 * false なら従来の漸次増加挙動（StartingInterval → MinInterval）。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Tempo")
+	bool bSpawnAllAtStart = true;
+
+	/** bSpawnAllAtStart=true のときに全員配置し切るまでの時間（秒） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Tempo", meta=(ClampMin="1.0", EditCondition="bSpawnAllAtStart"))
+	float FrontLoadWindowSeconds = 20.f;
+
 	// =========================================================================
 	// バリアント（強さプリセット）
 	// =========================================================================

@@ -24,12 +24,24 @@ void ATomatinaThrowerSpawner::BeginPlay()
 	Super::BeginPlay();
 
 	NextSpawnTimer  = InitialDelay;
-	CurrentInterval = StartingInterval;
 	SpawnedCount    = 0;
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaThrowerSpawner: BeginPlay InitialDelay=%.1f Start=%.1f Min=%.1f Max=%d"),
-		InitialDelay, StartingInterval, MinInterval, MaxThrowers);
+	if (bSpawnAllAtStart && MaxThrowers > 0)
+	{
+		// 窓 20 秒に MaxThrowers 体を均等配置
+		const float Window = FMath::Max(1.f, FrontLoadWindowSeconds);
+		CurrentInterval    = Window / static_cast<float>(MaxThrowers);
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaThrowerSpawner: BeginPlay [FrontLoad] Window=%.1fs Interval=%.2fs Max=%d"),
+			Window, CurrentInterval, MaxThrowers);
+	}
+	else
+	{
+		CurrentInterval = StartingInterval;
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaThrowerSpawner: BeginPlay InitialDelay=%.1f Start=%.1f Min=%.1f Max=%d"),
+			InitialDelay, StartingInterval, MinInterval, MaxThrowers);
+	}
 }
 
 // =============================================================================
@@ -40,24 +52,38 @@ void ATomatinaThrowerSpawner::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// FrontLoad モード：MaxThrowers 体を均等配置し終わったら完全停止
+	if (bSpawnAllAtStart && SpawnedCount >= MaxThrowers)
+	{
+		return;
+	}
+
 	NextSpawnTimer -= DeltaTime;
 	if (NextSpawnTimer > 0.f) { return; }
 
 	PruneDeadThrowers();
 
-	if (LiveThrowers.Num() >= MaxThrowers)
+	// 従来モードのみ上限で一時停止。FrontLoad モードは上の return で既に終了している
+	if (!bSpawnAllAtStart && LiveThrowers.Num() >= MaxThrowers)
 	{
-		// 上限に達してたら少しだけ待って再判定
 		NextSpawnTimer = 1.0f;
 		return;
 	}
 
 	SpawnThrowerNow();
 
-	// 次の出現間隔を短くする
-	CurrentInterval = FMath::Max(MinInterval, CurrentInterval - IntervalDecreasePerSpawn);
-	NextSpawnTimer  = CurrentInterval + FMath::RandRange(-IntervalVariance, IntervalVariance);
-	NextSpawnTimer  = FMath::Max(NextSpawnTimer, 0.5f);
+	if (bSpawnAllAtStart)
+	{
+		// 均等間隔を維持（ゆらぎ無し）
+		NextSpawnTimer = CurrentInterval;
+	}
+	else
+	{
+		// 従来：次の出現間隔を短くする（漸次増加）
+		CurrentInterval = FMath::Max(MinInterval, CurrentInterval - IntervalDecreasePerSpawn);
+		NextSpawnTimer  = CurrentInterval + FMath::RandRange(-IntervalVariance, IntervalVariance);
+		NextSpawnTimer  = FMath::Max(NextSpawnTimer, 0.5f);
+	}
 }
 
 // =============================================================================
