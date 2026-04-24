@@ -222,7 +222,9 @@ void ATomatinaHUD::CreatePhoneWindow()
 		}
 	}
 
-	const FVector2D ScreenPos(MainWidth, 0.f);
+	const FVector2D ScreenPos = bOverridePhoneWindowPosition
+		? PhoneWindowPositionOverride
+		: FVector2D(MainWidth, 0.f);
 	const FVector2D ClientSize(PhoneWidth, PhoneHeight);
 
 	TSharedRef<SWindow> NewWindow = SNew(SWindow)

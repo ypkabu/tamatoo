@@ -143,6 +143,19 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="HUD|Screen")
 	bool bUseSeparatePhoneWindow = true;
 
+	/** スマホウィンドウの位置を BP で明示指定する。
+	 *  bOverridePhoneWindowPosition=true なら PhoneWindowPositionOverride を使用。
+	 *  false のときは MainWidth をそのまま X 座標に使う (従来動作)。
+	 *  スマホの物理位置（Windows デスクトップ座標）と合わない場合に使う。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Screen")
+	bool bOverridePhoneWindowPosition = false;
+
+	/** スマホウィンドウ配置座標（デスクトップピクセル座標）。
+	 *  bOverridePhoneWindowPosition=true のとき有効。
+	 *  Windows の「設定→ディスプレイ」でスマホが配置されている座標に合わせる。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Screen", meta=(EditCondition="bOverridePhoneWindowPosition"))
+	FVector2D PhoneWindowPositionOverride = FVector2D(2560.f, 0.f);
+
 	// =========================================================================
 	// カーソル追従（C++ で位置操作する例外1）
 	// =========================================================================
