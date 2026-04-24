@@ -192,21 +192,35 @@ void ATomatinaCrowdMember::TickMovement(float DeltaTime)
 		return;
 	}
 
-	FVector Dir = ToDest.GetSafeNormal2D();
-	if (Dir.IsNearlyZero()) { return; }
+	FVector Dir;
 
-	// 左右ペーシングモードでは Burst ジッターを完全に無効化。軸を固定するだけ。
+	// 左右ペーシングモードでは符号だけ取って軸を完全固定。
+	// bLeftRightUsesYAxis の値に関わらず、ToDest の該当軸の符号で +/- を決める。
 	if (bMoveLeftRightOnly)
 	{
-		if (bLeftRightUsesYAxis) { Dir.X = 0.f; }
-		else                     { Dir.Y = 0.f; }
-		Dir = Dir.GetSafeNormal2D();
-		if (Dir.IsNearlyZero()) { return; }
+		if (bLeftRightUsesYAxis)
+		{
+			const float S = FMath::Sign(ToDest.Y);
+			if (FMath::IsNearlyZero(S)) { return; }
+			Dir = FVector(0.f, S, 0.f);
+		}
+		else
+		{
+			const float S = FMath::Sign(ToDest.X);
+			if (FMath::IsNearlyZero(S)) { return; }
+			Dir = FVector(S, 0.f, 0.f);
+		}
 	}
-	else if (CurrentAction == ECrowdAction::Burst && BurstJitter > 0.f)
+	else
 	{
-		const FVector Jitter = FMath::VRand() * BurstJitter;
-		Dir = (Dir + Jitter * 0.01f).GetSafeNormal2D();
+		Dir = ToDest.GetSafeNormal2D();
+		if (Dir.IsNearlyZero()) { return; }
+
+		if (CurrentAction == ECrowdAction::Burst && BurstJitter > 0.f)
+		{
+			const FVector Jitter = FMath::VRand() * BurstJitter;
+			Dir = (Dir + Jitter * 0.01f).GetSafeNormal2D();
+		}
 	}
 
 	// 進行方向へ向く（メッシュ natural forward が +X でない場合 MeshYawOffset で補正）
