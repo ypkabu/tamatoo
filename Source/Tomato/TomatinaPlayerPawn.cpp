@@ -211,13 +211,13 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 		}
 	}
 
-	// ── ZoomAlpha >= 0.99：カーソル非表示 / マウスルック有効化 ──────────
+	// ── ZoomAlpha >= 0.99：マウスルック有効化（カーソルは常時表示のまま） ──
 	if (bIsZooming && ZoomAlpha >= 0.99f && !bZoomComplete)
 	{
 		bZoomComplete = true;
-		PC->bShowMouseCursor = false;
+		PC->bShowMouseCursor = true;
 		PC->SetInputMode(FInputModeGameOnly());
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効）"));
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効・カーソル表示継続）"));
 	}
 
 	// ── ズーム中：マウスルックを SceneCapture_Zoom のローカル回転に適用 ──
