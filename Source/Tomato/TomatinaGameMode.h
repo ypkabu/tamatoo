@@ -37,9 +37,19 @@ struct FMissionData
 	UPROPERTY(EditAnywhere)
 	float TimeLimit = 15.0f;
 
-	/** スポーンするターゲット BP クラス */
+	/** スポーンするターゲット BP クラス。
+	 *  TargetClassVariants が空のときのフォールバックとして使用される。
+	 *  単一の BP しか使わないミッションなら従来通りここだけ埋めれば OK。 */
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<ATomatinaTargetBase> TargetClass;
+
+	/** ターゲットクラスのランダム候補リスト。
+	 *  空でなければ、SpawnCount 体それぞれについて **毎回ランダムに 1 つ** 選んでスポーンする。
+	 *  空なら TargetClass を使用（従来挙動）。
+	 *  例: [BP_Target_Gorilla, BP_Target_Chicken, BP_Target_UFOguy] を入れて
+	 *      「変な人コンテスト」ミッションを作る等。 */
+	UPROPERTY(EditAnywhere)
+	TArray<TSubclassOf<ATomatinaTargetBase>> TargetClassVariants;
 
 	/** 同時スポーン数 */
 	UPROPERTY(EditAnywhere)
