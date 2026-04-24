@@ -10,9 +10,9 @@
 	"DocsURL": "https://github.com/ultraleap/UnrealPlugin#readme",
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/bee1e122fcae438abb50441ee6286d92",
 	"SupportURL": "",
-	"EngineVersion": "5.4.0",
+	"EngineVersion": "5.7.0",
 	"CanContainContent": true,
-	"Installed": true,
+	"Installed": false,
 	"Modules": [
 		{
 			"Name": "UltraleapTracking",
