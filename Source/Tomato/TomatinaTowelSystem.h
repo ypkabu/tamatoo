@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TomatinaSoundCue.h"  // FTomatinaSoundCue
 #include "TomatinaTowelSystem.generated.h"
 
 class ATomatoDirtManager;
@@ -134,6 +135,14 @@ public:
 	/** 拭く音のピッチ倍率 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wipe|Audio", meta=(ClampMin="0.1", ClampMax="4.0"))
 	float WipeLoopPitch = 1.0f;
+
+	/** タオル耐久が 0 になった瞬間の SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Towel|Audio")
+	FTomatinaSoundCue TowelBreakSound;
+
+	/** タオル交換完了（新しいタオルが使える）瞬間の SE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Towel|Audio")
+	FTomatinaSoundCue TowelReadySound;
 
 	// =========================================================================
 	// 撮影判定

@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
 
+#include "TomatinaFunctionLibrary.h"
 #include "TomatinaProjectile.h"
 
 // =============================================================================
@@ -172,6 +173,10 @@ void ATomatinaThrower::StartThrow()
 
 	OnThrowStarted();
 
+	// 投擲開始 SE（Thrower 位置から 3D 再生）
+	UTomatinaFunctionLibrary::PlayTomatinaCueAtLocation(
+		this, ThrowStartSound, GetActorLocation());
+
 	if (ReleaseDelay > 0.f)
 	{
 		ReleaseTimer = ReleaseDelay;
@@ -221,6 +226,10 @@ void ATomatinaThrower::ReleaseTomato()
 	ATomatinaProjectile* Tomato = World->SpawnActor<ATomatinaProjectile>(
 		ProjectileClass, SpawnLoc, FRotator::ZeroRotator);
 	if (!Tomato) { return; }
+
+	// リリース SE（手から離れた位置で 3D 再生）
+	UTomatinaFunctionLibrary::PlayTomatinaCueAtLocation(
+		this, ThrowReleaseSound, SpawnLoc);
 
 	// プレイヤー狙いか街狙いかを Projectile に伝える
 	Tomato->bAimedAtPlayer = bAimPlayer;

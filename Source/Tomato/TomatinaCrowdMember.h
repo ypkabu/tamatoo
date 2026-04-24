@@ -107,6 +107,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement", meta=(EditCondition="bMoveLeftRightOnly"))
 	bool bLeftRightUsesYAxis = true;
 
+	/** メッシュの natural forward が +X と違う場合の Yaw 補正（度）。
+	 *  Mixamo 系は +Y が前なので MeshYawOffset = -90。
+	 *  UE 標準人型（+X 前）は 0 のままで OK。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
+	float MeshYawOffset = 0.f;
+
 	// =========================================================================
 	// 状態（BP / AnimBP から参照可）
 	// =========================================================================

@@ -374,6 +374,9 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 		HUD->ShowCursor();
 	}
 
+	// ズーム開始 SE
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, ZoomInSound);
+
 	UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ズーム開始 Offset=(%.1f,%.1f,%.1f)"),
 		TargetOffset.X, TargetOffset.Y, TargetOffset.Z);
 }
@@ -384,6 +387,12 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& /*Value*/)
 {
 	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMouseReleased"));
+
+	// ズーム解除 SE（ズーム中のみ鳴らす。未ズーム時のキャンセル連打で鳴らないように）
+	if (bIsZooming)
+	{
+		UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, ZoomOutSound);
+	}
 
 	bIsZooming      = false;
 	bZoomComplete   = false;

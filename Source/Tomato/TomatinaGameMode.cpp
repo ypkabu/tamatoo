@@ -118,6 +118,8 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 			{
 				HUD->ShowCountdown(NewSecond);
 			}
+			// カウントダウン各秒の SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownTickSound);
 		}
 
 		if (CountdownRemaining <= 0.f)
@@ -129,6 +131,8 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 			{
 				HUD->HideCountdown();
 			}
+			// スタートの合図 SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownGoSound);
 			StartMission(0);
 		}
 		return;
@@ -210,6 +214,9 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 				HUD->ShowMissionResult(0, TEXT("時間切れ！"));
 			}
 
+			// 時間切れ SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TimeUpSound);
+
 			bIsShowingMissionResult = true;
 			MissionResultElapsed    = 0.f;
 		}
@@ -249,6 +256,9 @@ void ATomatinaGameMode::StartMission(int32 Index)
 	}
 
 	RemainingTime = (Mission.TimeLimit > 0.f) ? Mission.TimeLimit : -1.f;
+
+	// ミッション開始 SE
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, MissionStartSound);
 }
 
 // =============================================================================
@@ -409,6 +419,9 @@ void ATomatinaGameMode::BeginFinalResultBuildup()
 
 	// BGM 以外のすべての音を停止
 	StopAllSoundsExceptBGM();
+
+	// 溜め開始の合図 SE（BGM のみ残った静寂に対して効果的）
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, FinalBuildupSound);
 
 	// 汚れ全削除
 	if (ATomatoDirtManager* DirtMgr = GetDirtManager())

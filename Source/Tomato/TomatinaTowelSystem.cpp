@@ -12,7 +12,7 @@
 #include "TomatoDirtManager.h"
 #include "TomatinaPlayerPawn.h"
 #include "TomatinaHUD.h"
-#include "TomatinaFunctionLibrary.h"
+#include "TomatinaFunctionLibrary.h"  // PlayTomatinaCue2D
 
 // =============================================================================
 // コンストラクタ
@@ -100,6 +100,9 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 			CurrentDurability = MaxDurability;
 			UE_LOG(LogTemp, Warning,
 				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
+
+			// 交換完了 SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelReadySound);
 		}
 		return;
 	}
@@ -125,6 +128,9 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 			SwapTimer         = SwapDuration;
 			UE_LOG(LogTemp, Warning,
 				TEXT("ATomatinaTowelSystem: 耐久値切れ → タオル交換開始 (%.1f 秒)"), SwapDuration);
+
+			// タオル破損 SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelBreakSound);
 		}
 	}
 
