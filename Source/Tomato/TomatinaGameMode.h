@@ -11,6 +11,7 @@ class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UTexture2D;
 class USoundBase;
+class UAudioComponent;
 class ATomatinaTargetSpawner;
 class ATomatinaHUD;
 class ATomatoDirtManager;
@@ -50,6 +51,31 @@ struct FMissionData
 	/** ターゲットのプレビュー画像（HUD の IMG_TargetPreview に表示） */
 	UPROPERTY(EditAnywhere)
 	UTexture2D* TargetImage = nullptr;
+};
+
+// -----------------------------------------------------------------------------
+// FFanfareTier — スコア閾値ごとのファンファーレ SE
+// -----------------------------------------------------------------------------
+USTRUCT(BlueprintType)
+struct FFanfareTier
+{
+	GENERATED_BODY()
+
+	/** このスコア以上なら Sound を採用（降順で評価され、最も高い閾値が勝つ） */
+	UPROPERTY(EditAnywhere)
+	int32 MinScore = 0;
+
+	/** 再生するファンファーレ SE */
+	UPROPERTY(EditAnywhere)
+	USoundBase* Sound = nullptr;
+
+	/** 音量倍率 */
+	UPROPERTY(EditAnywhere, meta=(ClampMin="0.0", ClampMax="4.0"))
+	float VolumeMultiplier = 1.0f;
+
+	/** ピッチ倍率 */
+	UPROPERTY(EditAnywhere, meta=(ClampMin="0.1", ClampMax="4.0"))
+	float PitchMultiplier = 1.0f;
 };
 
 UENUM(BlueprintType)
@@ -103,12 +129,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
 	USoundBase* BGM = nullptr;
 
+	/** 観客ざわめき（ゲームプレイ中ループ再生。BeginPlay で開始、最終リザルトで停止） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
+	USoundBase* CrowdAmbient = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio", meta=(ClampMin="0.0", ClampMax="4.0"))
+	float CrowdAmbientVolume = 1.0f;
+
+	/** 撮影後のファンファーレ（写真スコア別）。MinScore 降順で最初に一致したものを再生 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio")
+	TArray<FFanfareTier> FanfareTiers;
+
 	// ── リザルト表示時間 ──────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
 	float ResultDisplayTime = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
 	float MissionResultDisplayTime = 2.0f;
+
+	/** 最終リザルト表示前の「溜め」時間（秒）。この間 BGM 以外の音停止・汚れ全削除 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result", meta=(ClampMin="0.0", ClampMax="10.0"))
+	float FinalResultBuildupTime = 1.5f;
 
 	/** 撮影写真に写り込んだ汚れ 1 個あたりの減点量（負の値を推奨） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Score")
@@ -210,6 +251,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	bool bIsShowingMissionResult = false;
 
+	/** 最終リザルトの溜め中（画面暗転・音停止・汚れ消去） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
+	bool bIsBuildingUpFinalResult = false;
+
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	float RemainingTime = -1.f;
 
@@ -234,12 +279,24 @@ private:
 	// ── リザルト計時（FApp::GetDeltaTime 累積） ──────────────
 	float ResultElapsed = 0.f;
 	float MissionResultElapsed = 0.f;
+	float FinalBuildupElapsed = 0.f;
 
 	UPROPERTY()
 	ATomatinaTargetSpawner* TargetSpawner = nullptr;
 
+	/** BGM 再生用の AudioComponent。StopAllSoundsExceptBGM で判別に使う */
+	UPROPERTY()
+	UAudioComponent* BGMAudioComp = nullptr;
+
+	/** 観客ざわめき再生用の AudioComponent */
+	UPROPERTY()
+	UAudioComponent* CrowdAudioComp = nullptr;
+
 	void ShuffleMissions();
+	void BeginFinalResultBuildup();
 	void ShowFinalResult();
+	void StopAllSoundsExceptBGM();
+	void PlayFanfareForShotScore(int32 ShotScore);
 	ATomatinaHUD* GetTomatinaHUD() const;
 	void CachePlayerPawnSizes();
 	ATomatoDirtManager* GetDirtManager();

@@ -210,6 +210,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Dirt")
 	float GetSecondsSinceLastWipe() const;
 
+	/** 全汚れを即時削除（最終リザルト前の溜め演出などで使用） */
+	UFUNCTION(BlueprintCallable, Category="Dirt")
+	void ClearAllDirts();
+
 private:
 	/** SpawnDirt までの残り時間 */
 	float SpawnTimer = 0.0f;

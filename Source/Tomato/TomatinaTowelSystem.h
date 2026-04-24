@@ -8,6 +8,8 @@
 
 class ATomatoDirtManager;
 class ATomatinaPlayerPawn;
+class USoundBase;
+class UAudioComponent;
 
 /**
  * タオルの表示・拭き取り・耐久値を管理する。
@@ -118,6 +120,22 @@ public:
 	float SpeedMultiplier = 0.01f;
 
 	// =========================================================================
+	// 拭く音（ループ SE）
+	// =========================================================================
+
+	/** 拭いている間ループ再生する SE（ループ設定の SoundWave/SoundCue を推奨） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wipe|Audio")
+	USoundBase* WipeLoopSound = nullptr;
+
+	/** 拭く音のボリューム倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wipe|Audio", meta=(ClampMin="0.0", ClampMax="4.0"))
+	float WipeLoopVolume = 1.0f;
+
+	/** 拭く音のピッチ倍率 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Wipe|Audio", meta=(ClampMin="0.1", ClampMax="4.0"))
+	float WipeLoopPitch = 1.0f;
+
+	// =========================================================================
 	// 撮影判定
 	// =========================================================================
 
@@ -149,4 +167,13 @@ private:
 
 	UPROPERTY()
 	ATomatinaPlayerPawn* CachedPlayerPawn;
+
+	/** 拭き SE の AudioComponent（ループ再生中に保持） */
+	UPROPERTY()
+	UAudioComponent* WipeAudioComp = nullptr;
+
+	/** Tick 間の拭き状態を保持（エッジ検出用） */
+	bool bWasWiping = false;
+
+	void UpdateWipeSound(bool bIsWiping);
 };

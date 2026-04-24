@@ -548,7 +548,7 @@ void ATomatinaHUD::Tick(float DeltaSeconds)
 	if (bFlashActive && ShutterFlashWidget)
 	{
 		FlashElapsed += FApp::GetDeltaTime();
-		if (FlashElapsed >= 0.1f)
+		if (FlashElapsed >= ShutterFlashDuration)
 		{
 			ShutterFlashWidget->RemoveFromParent();
 			ShutterFlashWidget = nullptr;
@@ -1058,7 +1058,7 @@ void ATomatinaHUD::PlayShutterFlash()
 
 	ShutterFlashWidget = CreateWidget<UUserWidget>(PC, ShutterFlashWidgetClass);
 	if (!ShutterFlashWidget) { return; }
-	ShutterFlashWidget->AddToViewport(999);
+	ShutterFlashWidget->AddToViewport(ShutterFlashZOrder);
 
 	bFlashActive = true;
 	FlashElapsed = 0.f;

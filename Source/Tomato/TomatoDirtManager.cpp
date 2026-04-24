@@ -209,6 +209,15 @@ float ATomatoDirtManager::GetSecondsSinceLastWipe() const
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+void ATomatoDirtManager::ClearAllDirts()
+{
+	const int32 PrevCount = DirtSplats.Num();
+	DirtSplats.Empty();
+	UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::ClearAllDirts: %d 個の汚れを全削除"), PrevCount);
+	NotifyHUD();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 void ATomatoDirtManager::WipeDirtAt(FVector2D NormPos, float Radius, float Amount)
 {
 	bool bAnyChanged = false;
