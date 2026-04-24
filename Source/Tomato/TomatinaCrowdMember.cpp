@@ -228,7 +228,38 @@ void ATomatinaCrowdMember::TickMovement(float DeltaTime)
 	Look.Pitch = 0.f;
 	Look.Roll  = 0.f;
 	Look.Yaw  += MeshYawOffset;
-	SetActorRotation(Look);
+
+	// MeshComp の相対回転に残値があると Actor 回転を上書きしても見た目が変わらないため、0 に戻す保険
+	if (bResetMeshRelativeRotation && MeshComp)
+	{
+		MeshComp->SetRelativeRotation(FRotator::ZeroRotator);
+	}
+
+	// 通常は Actor 回転で全体を回すが、BP 派生で Root が変わっている／AnimBP に
+	// 上書きされる等の場合は MeshComp の WorldRotation を直接強制できるように切替可能
+	if (bRotateMeshComponentDirectly && MeshComp)
+	{
+		MeshComp->SetWorldRotation(Look);
+	}
+	else
+	{
+		SetActorRotation(Look);
+	}
+
+	// 診断用ログ（毎秒 1 回）
+	if (bDebugLogFacing)
+	{
+		DebugLogTimer += DeltaTime;
+		if (DebugLogTimer >= 1.f)
+		{
+			DebugLogTimer = 0.f;
+			const FRotator ActorRot = GetActorRotation();
+			const FRotator MeshRot  = MeshComp ? MeshComp->GetComponentRotation() : FRotator::ZeroRotator;
+			UE_LOG(LogTemp, Warning,
+				TEXT("Crowd[%s] Dir=(%.2f,%.2f) TargetYaw=%.1f ActorYaw=%.1f MeshYaw=%.1f Offset=%.1f"),
+				*GetName(), Dir.X, Dir.Y, Look.Yaw, ActorRot.Yaw, MeshRot.Yaw, MeshYawOffset);
+		}
+	}
 
 	SetActorLocation(Cur + Dir * CurrentSpeed * DeltaTime, /*bSweep=*/false);
 }

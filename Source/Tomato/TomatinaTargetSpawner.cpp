@@ -84,10 +84,22 @@ void ATomatinaTargetSpawner::SpawnTargetsForMission(const FMissionData& Mission)
 	// 既存ターゲットを全消去
 	DestroyAllTargets();
 
-	if (!Mission.TargetClass)
+	// 候補クラスリストを構築（TargetClassVariants 優先、無ければ TargetClass 単体）
+	TArray<TSubclassOf<ATomatinaTargetBase>> Candidates;
+	for (const TSubclassOf<ATomatinaTargetBase>& C : Mission.TargetClassVariants)
+	{
+		if (C) { Candidates.Add(C); }
+	}
+	if (Candidates.Num() == 0 && Mission.TargetClass)
+	{
+		Candidates.Add(Mission.TargetClass);
+	}
+
+	if (Candidates.Num() == 0)
 	{
 		UE_LOG(LogTemp, Error,
-			TEXT("ATomatinaTargetSpawner::SpawnTargetsForMission: TargetClass が未設定"));
+			TEXT("ATomatinaTargetSpawner::SpawnTargetsForMission: "
+			     "TargetClass も TargetClassVariants も未設定"));
 		return;
 	}
 
@@ -130,8 +142,12 @@ void ATomatinaTargetSpawner::SpawnTargetsForMission(const FMissionData& Mission)
 		Params.SpawnCollisionHandlingOverride =
 			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
+		// 候補クラスから毎スポーンごとにランダム 1 つ選択
+		TSubclassOf<ATomatinaTargetBase> PickedClass =
+			Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+
 		ATomatinaTargetBase* Target = GetWorld()->SpawnActor<ATomatinaTargetBase>(
-			Mission.TargetClass, SpawnLoc, SpawnRot, Params);
+			PickedClass, SpawnLoc, SpawnRot, Params);
 
 		if (!Target)
 		{
@@ -169,8 +185,9 @@ void ATomatinaTargetSpawner::SpawnTargetsForMission(const FMissionData& Mission)
 		ActiveTargets.Add(Target);
 
 		UE_LOG(LogTemp, Log,
-			TEXT("ATomatinaTargetSpawner: スポーン完了 Type=%s Loc=(%.0f,%.0f,%.0f)"),
+			TEXT("ATomatinaTargetSpawner: スポーン完了 Type=%s Class=%s Loc=(%.0f,%.0f,%.0f)"),
 			*Mission.TargetType.ToString(),
+			*GetNameSafe(PickedClass),
 			SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z);
 	}
 
