@@ -310,8 +310,14 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 
 	if (!bHit)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ヒットなし（ズームキャンセル）"));
-		return;
+		// 虚空（空）に仮想ヒット点を置いてズームを続行する。
+		// これにより鳥など空中オブジェクトもズームして撮影できる。
+		const float SkyDist = FMath::Max(100.f, SkyFallbackDistance);
+		Hit.ImpactPoint  = WorldLoc + WorldDir * SkyDist;
+		Hit.ImpactNormal = -WorldDir;
+		UE_LOG(LogTemp, Warning,
+			TEXT("OnRightMousePressed: ヒットなし → 仮想空ヒット距離 %.0f cm で続行"),
+			SkyDist);
 	}
 
 	TargetOffset = UTomatinaFunctionLibrary::CalculateZoomOffset(
