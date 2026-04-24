@@ -65,6 +65,21 @@ void ATomatinaGameMode::BeginPlay()
 	DirtCoverage01 = 0.f;
 	LastHighScoreShotTime = -1000.f;
 
+	// BGM 再生前に、既に同じサウンドを再生している AudioComponent を全部止める。
+	// (BP の Event BeginPlay で Play Sound 2D 重複、AmbientSound 配置、PIE 再生残骸への保険)
+	if (UWorld* W = GetWorld())
+	{
+		for (TObjectIterator<UAudioComponent> It; It; ++It)
+		{
+			UAudioComponent* Comp = *It;
+			if (!IsValid(Comp))             { continue; }
+			if (Comp->GetWorld() != W)      { continue; }
+			if (!Comp->IsPlaying())         { continue; }
+			if (BGM && Comp->Sound == BGM)                   { Comp->Stop(); }
+			else if (CrowdAmbient && Comp->Sound == CrowdAmbient) { Comp->Stop(); }
+		}
+	}
+
 	// BGM 再生（StopAllSoundsExceptBGM で判別するために AudioComponent を保持）
 	if (BGM)
 	{
@@ -539,6 +554,9 @@ void ATomatinaGameMode::ShowFinalResult()
 	{
 		HUD->ShowFinalResult(TotalScore, Missions.Num(), AvgRankStr, SyncRate);
 	}
+
+	// リザルト表示の瞬間の SE（発表ファンファーレ等）
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, FinalResultRevealSound);
 }
 
 // =============================================================================

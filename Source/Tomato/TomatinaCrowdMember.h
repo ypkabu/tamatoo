@@ -113,6 +113,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
 	float MeshYawOffset = 0.f;
 
+	/** true にすると Actor 回転ではなく MeshComp の WorldRotation を直接上書きする。
+	 *  BP 派生で Root を差し替えている／AnimBP に上書きされる場合の最終手段。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
+	bool bRotateMeshComponentDirectly = false;
+
+	/** 毎フレーム MeshComp の RelativeRotation を 0 に戻して、回転残値を打ち消す保険 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
+	bool bResetMeshRelativeRotation = true;
+
+	/** true にすると毎秒 1 回向き計算結果を Output Log に出す（原因特定用） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Movement")
+	bool bDebugLogFacing = false;
+
 	// =========================================================================
 	// 状態（BP / AnimBP から参照可）
 	// =========================================================================
@@ -151,6 +164,9 @@ private:
 
 	/** 左右ペーシング用：次の目標が +側か -側か */
 	bool bPacingHeadingPositive = true;
+
+	/** デバッグログ間引き用タイマー */
+	float DebugLogTimer = 0.f;
 
 	void EnterAction(ECrowdAction NewAction);
 	FVector PickRandomPointInArea();
