@@ -303,6 +303,9 @@ private:
 	float MissionResultElapsed = 0.f;
 	float FinalBuildupElapsed = 0.f;
 
+	/** 直前の撮影が成功したか（true なら次ミッションへ、false なら同ミッション継続） */
+	bool bLastPhotoSucceeded = false;
+
 	UPROPERTY()
 	ATomatinaTargetSpawner* TargetSpawner = nullptr;
 

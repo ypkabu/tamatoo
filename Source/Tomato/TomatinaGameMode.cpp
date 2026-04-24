@@ -153,7 +153,12 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 				HUD->HideResult();
 			}
 
-			StartMission(CurrentMissionIndex + 1);
+			if (bLastPhotoSucceeded)
+			{
+				// 成功 → 次ミッションへ
+				StartMission(CurrentMissionIndex + 1);
+			}
+			// 失敗時は同ミッション継続（ターゲットは生きたまま、残り時間も継続）
 		}
 		return;
 	}
@@ -367,8 +372,11 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		}
 	}
 
+	// 成功/失敗フラグ（Tick 側の分岐で使う。失敗時は次ミッションへ進めない）
+	bLastPhotoSucceeded = (Score > 0);
+
 	// ④ 撮影成功なら BestTarget を Spawner から除去
-	if (Score > 0 && TargetSpawner && Result.BestTarget)
+	if (bLastPhotoSucceeded && TargetSpawner && Result.BestTarget)
 	{
 		TargetSpawner->RemoveTarget(Result.BestTarget);
 	}
@@ -382,8 +390,11 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 	// ⑤' ファンファーレ（今回の撮影スコアに応じて音を変える）
 	PlayFanfareForShotScore(Score);
 
-	// ⑥ ミッションタイマーを止める
-	RemainingTime = -1.f;
+	// ⑥ ミッションタイマー：成功時のみ停止。失敗時は継続（同ミッションを続ける）
+	if (bLastPhotoSucceeded)
+	{
+		RemainingTime = -1.f;
+	}
 
 	// ⑦ 世界停止 → HUD にフラッシュ・結果表示
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.0f);
