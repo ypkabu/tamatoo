@@ -65,6 +65,27 @@ void ATomatinaGameMode::BeginPlay()
 	DirtCoverage01 = 0.f;
 	LastHighScoreShotTime = -1000.f;
 
+	// ゲーム全体の制限時間を決定：BP で上書きされていればそれ、そうでなければミッション合計
+	if (GameTimeOverride > 0.f)
+	{
+		GameTimeTotal = GameTimeOverride;
+	}
+	else
+	{
+		GameTimeTotal = 0.f;
+		for (const FMissionData& M : Missions)
+		{
+			if (M.TimeLimit > 0.f)
+			{
+				GameTimeTotal += M.TimeLimit;
+			}
+		}
+	}
+	GameTimeRemaining = GameTimeTotal;
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode: ゲーム全体制限時間 %.1f 秒 (Override=%.1f Missions合計適用)"),
+		GameTimeTotal, GameTimeOverride);
+
 	// BGM 再生前に、既に同じサウンドを再生している AudioComponent を全部止める。
 	// (BP の Event BeginPlay で Play Sound 2D 重複、AmbientSound 配置、PIE 再生残骸への保険)
 	if (UWorld* W = GetWorld())
@@ -145,12 +166,36 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 			if (ATomatinaHUD* HUD = GetTomatinaHUD())
 			{
 				HUD->HideCountdown();
+				// ゲーム全体タイマーの初期表示
+				HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
 			}
 			// スタートの合図 SE
 			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownGoSound);
 			StartMission(0);
 		}
 		return;
+	}
+
+	// ── ゲーム全体の制限時間カウントダウン ─────────────
+	// カウントダウン中・リザルト表示中以外（TimeDilation=1 の時）にだけ減る
+	if (!bIsShowingResult && !bIsShowingMissionResult && !bIsBuildingUpFinalResult
+		&& GameTimeRemaining > 0.f)
+	{
+		GameTimeRemaining -= DeltaSeconds; // TimeDilation 準拠なのでポーズ中は進まない
+		if (GameTimeRemaining < 0.f) { GameTimeRemaining = 0.f; }
+
+		if (ATomatinaHUD* HUD = GetTomatinaHUD())
+		{
+			HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
+		}
+
+		if (GameTimeRemaining <= 0.f)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaGameMode: ゲーム全体の制限時間に到達 → 最終リザルトへ"));
+			BeginFinalResultBuildup();
+			return;
+		}
 	}
 
 	// ── 撮影リザルト表示中（TimeDilation=0 なので FApp で計測） ──

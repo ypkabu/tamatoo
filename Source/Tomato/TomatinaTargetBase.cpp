@@ -14,11 +14,16 @@ ATomatinaTargetBase::ATomatinaTargetBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	// SceneComponent を root にして、MeshComp を子として attach。
+	// これにより BP 側で MeshComp の Location/Rotation/Scale を自由に編集できる。
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+
 	MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
-	SetRootComponent(MeshComp);
+	MeshComp->SetupAttachment(SceneRoot);
 
 	MarkerWidgetComp = CreateDefaultSubobject<UWidgetComponent>(TEXT("MarkerWidgetComp"));
-	MarkerWidgetComp->SetupAttachment(MeshComp);
+	MarkerWidgetComp->SetupAttachment(SceneRoot);
 	MarkerWidgetComp->SetWidgetSpace(EWidgetSpace::Screen); // 常にカメラを向く
 	MarkerWidgetComp->SetDrawSize(FVector2D(128.f, 128.f));
 	MarkerWidgetComp->SetRelativeLocation(FVector(0.f, 0.f, 160.f));

@@ -127,6 +127,26 @@ public:
 	bool bDebugLogFacing = false;
 
 	// =========================================================================
+	// 汚れ累積（マテリアルの Scalar Parameter "DirtAmount" 0-1 を時間で上昇）
+	// =========================================================================
+
+	/** 汚れが最大に到達するまでの時間（秒）。0 以下なら汚れ累積無効 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt")
+	float DirtAccumulationTime = 120.f;
+
+	/** 最終的に到達する汚れ量（0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MaxDirtAmount = 1.0f;
+
+	/** マテリアルに渡す Scalar Parameter 名 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt")
+	FName DirtParameterName = TEXT("DirtAmount");
+
+	/** 現在の汚れ量（BP 読取） */
+	UPROPERTY(BlueprintReadOnly, Category="Crowd|Dirt")
+	float CurrentDirtAmount = 0.f;
+
+	// =========================================================================
 	// 状態（BP / AnimBP から参照可）
 	// =========================================================================
 	UPROPERTY(BlueprintReadOnly, Category="Crowd|State")

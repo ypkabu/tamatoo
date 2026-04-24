@@ -150,6 +150,31 @@ public:
 	FTomatinaSoundCue ThrowReleaseSound;
 
 	// =========================================================================
+	// 向き補正
+	// =========================================================================
+	/** メッシュ natural forward が +X でない場合の Yaw 補正（度）。Mixamo系=-90 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Movement")
+	float MeshYawOffset = 0.f;
+
+	// =========================================================================
+	// 汚れ累積（マテリアルの Scalar Parameter "DirtAmount" 0-1 を時間で上昇）
+	// =========================================================================
+	/** 汚れが最大に到達するまでの時間（秒）。0 以下なら無効 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Dirt")
+	float DirtAccumulationTime = 120.f;
+
+	/** 最終到達汚れ量（0〜1） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Dirt", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MaxDirtAmount = 1.0f;
+
+	/** マテリアルに渡す Scalar Parameter 名 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Dirt")
+	FName DirtParameterName = TEXT("DirtAmount");
+
+	UPROPERTY(BlueprintReadOnly, Category="Thrower|Dirt")
+	float CurrentDirtAmount = 0.f;
+
+	// =========================================================================
 	// API
 	// =========================================================================
 
