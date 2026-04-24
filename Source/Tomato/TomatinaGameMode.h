@@ -162,6 +162,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Result")
 	FTomatinaSoundCue FinalBuildupSound;
 
+	/** 最終リザルト（スコア）画面が表示された瞬間の SE（ファンファーレ・発表系推奨） */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Audio|Result")
+	FTomatinaSoundCue FinalResultRevealSound;
+
 	// ── リザルト表示時間 ──────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result")
 	float ResultDisplayTime = 3.0f;
