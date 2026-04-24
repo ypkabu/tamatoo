@@ -46,7 +46,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target")
 	FName MyType = FName("None");
 
-	/** 被写体のビジュアルメッシュ */
+	/** シーンルート。MeshComp はこの配下にぶら下がるので BP で Location/Rotation/Scale を自由に変更できる */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Target")
+	USceneComponent* SceneRoot;
+
+	/** 被写体のビジュアルメッシュ（SceneRoot の子。BP で RelativeLocation/Rotation/Scale 編集可） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target")
 	USkeletalMeshComponent* MeshComp;
 

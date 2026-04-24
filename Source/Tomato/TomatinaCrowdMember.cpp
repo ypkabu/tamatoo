@@ -75,6 +75,14 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// 汚れ累積（常に進行。待機中でも時間は経過する）
+	if (DirtAccumulationTime > 0.f && CurrentDirtAmount < MaxDirtAmount && MeshComp)
+	{
+		const float Rate = MaxDirtAmount / DirtAccumulationTime;
+		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * DeltaTime, MaxDirtAmount);
+		MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+	}
+
 	if (StartJitterTimer > 0.f)
 	{
 		StartJitterTimer -= DeltaTime;

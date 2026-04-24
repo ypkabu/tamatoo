@@ -57,6 +57,14 @@ void ATomatinaThrower::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// 汚れ累積（State によらず時間で進行）
+	if (DirtAccumulationTime > 0.f && CurrentDirtAmount < MaxDirtAmount && MeshComp)
+	{
+		const float Rate = MaxDirtAmount / DirtAccumulationTime;
+		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * DeltaTime, MaxDirtAmount);
+		MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+	}
+
 	switch (State)
 	{
 	case EThrowerState::WalkingIn: TickWalk(DeltaTime);   break;
@@ -78,18 +86,22 @@ void ATomatinaThrower::TickWalk(float DeltaTime)
 	{
 		State      = EThrowerState::Active;
 		bIsWalking = false;
+		// 到着時に即投擲：StartDelay もスキップ、ThrowTimer も 0 に
+		bStartDelayActive = false;
+		ThrowTimer = 0.f;
 		OnArrivedAtDestination();
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: 目的地到着"), *GetName());
+		UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: 目的地到着・即投擲モード"), *GetName());
 		return;
 	}
 
 	const FVector Dir = ToDest.GetSafeNormal2D();
 	if (Dir.IsNearlyZero()) { return; }
 
-	// 進行方向を向く
+	// 進行方向を向く（MeshYawOffset でメッシュ個体差を補正）
 	FRotator Look = Dir.Rotation();
 	Look.Pitch = 0.f;
 	Look.Roll  = 0.f;
+	Look.Yaw  += MeshYawOffset;
 	SetActorRotation(Look);
 
 	SetActorLocation(Cur + Dir * WalkSpeed * DeltaTime, /*bSweep=*/false);
@@ -152,10 +164,11 @@ void ATomatinaThrower::StartThrow()
 	// このフレームで狙い先を確定（投擲時とリリース時で対象を一致させるため）
 	PendingAimLocation = PickAimLocation(bPendingAimAtPlayer);
 
-	// 体を狙う方向に向ける
+	// 体を狙う方向に向ける（MeshYawOffset でメッシュ個体差を補正）
 	FRotator LookRot = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PendingAimLocation);
 	LookRot.Pitch = 0.f;
 	LookRot.Roll  = 0.f;
+	LookRot.Yaw  += MeshYawOffset;
 	SetActorRotation(LookRot);
 
 	if (ThrowMontage && MeshComp)

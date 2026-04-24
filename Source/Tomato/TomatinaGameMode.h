@@ -187,6 +187,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Result", meta=(ClampMin="0.0", ClampMax="10.0"))
 	float FinalResultBuildupTime = 1.5f;
 
+	// ── ゲーム全体の制限時間 ─────────────────────────────────
+	/** ゲーム全体の制限時間（秒）を手動で上書き。0 以下なら Missions[].TimeLimit の合計を自動使用 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|GameTime")
+	float GameTimeOverride = 0.f;
+
+	/** ゲーム全体の残り時間（BP から参照可） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|GameTime")
+	float GameTimeRemaining = 0.f;
+
+	/** ゲーム全体の総制限時間（計算後の値） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|GameTime")
+	float GameTimeTotal = 0.f;
+
 	/** 撮影写真に写り込んだ汚れ 1 個あたりの減点量（負の値を推奨） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Score")
 	int32 DirtPenaltyPerSplat = -5;

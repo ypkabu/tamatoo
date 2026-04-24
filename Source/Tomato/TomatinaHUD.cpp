@@ -951,6 +951,36 @@ void ATomatinaHUD::UpdateTimer(float RemainingSeconds)
 }
 
 // =============================================================================
+// UpdateGameTimer — MissionDisplay の TXT_GameTimer / PB_GameTimer を更新（ゲーム全体）
+// =============================================================================
+void ATomatinaHUD::UpdateGameTimer(float RemainingSeconds, float TotalSeconds)
+{
+	if (!MissionDisplayWidget) { return; }
+
+	const float Clamped = FMath::Max(0.f, RemainingSeconds);
+	const int32 Mins = FMath::FloorToInt(Clamped / 60.f);
+	const int32 Secs = FMath::FloorToInt(Clamped) % 60;
+
+	// TXT_GameTimer （例: "1:23" ） 分:秒 表記
+	if (UTextBlock* Txt = Cast<UTextBlock>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("TXT_GameTimer"))))
+	{
+		Txt->SetText(FText::FromString(
+			FString::Printf(TEXT("%d:%02d"), Mins, Secs)));
+	}
+
+	// PB_GameTimer （ProgressBar。0〜1 の比率）
+	if (UProgressBar* Bar = Cast<UProgressBar>(
+			MissionDisplayWidget->GetWidgetFromName(TEXT("PB_GameTimer"))))
+	{
+		const float Ratio = (TotalSeconds > KINDA_SMALL_NUMBER)
+			? FMath::Clamp(Clamped / TotalSeconds, 0.f, 1.f)
+			: 0.f;
+		Bar->SetPercent(Ratio);
+	}
+}
+
+// =============================================================================
 // UpdateTotalScore — MissionDisplay の TXT_TotalScore を更新
 // =============================================================================
 void ATomatinaHUD::UpdateTotalScore(int32 InTotalScore)

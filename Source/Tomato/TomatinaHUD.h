@@ -212,6 +212,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void UpdateTimer(float RemainingSeconds);
 
+	/** ゲーム全体の残り時間を WBP_MissionDisplay の TXT_GameTimer / PB_GameTimer に反映 */
+	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
+	void UpdateGameTimer(float RemainingSeconds, float TotalSeconds);
+
 	UFUNCTION(BlueprintCallable, Category="HUD|Mission")
 	void UpdateTotalScore(int32 TotalScore);
 
