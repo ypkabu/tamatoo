@@ -2,12 +2,14 @@
 
 #include "TomatinaGameMode.h"
 
+#include "Components/AudioComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "UObject/UObjectIterator.h"
 
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaHUD.h"
@@ -63,10 +65,17 @@ void ATomatinaGameMode::BeginPlay()
 	DirtCoverage01 = 0.f;
 	LastHighScoreShotTime = -1000.f;
 
-	// BGM 再生
+	// BGM 再生（StopAllSoundsExceptBGM で判別するために AudioComponent を保持）
 	if (BGM)
 	{
-		UGameplayStatics::PlaySound2D(this, BGM);
+		BGMAudioComp = UGameplayStatics::SpawnSound2D(this, BGM);
+	}
+
+	// 観客ざわめきループ（最終リザルト溜めで StopAllSoundsExceptBGM により停止される）
+	if (CrowdAmbient)
+	{
+		CrowdAudioComp = UGameplayStatics::SpawnSound2D(
+			this, CrowdAmbient, CrowdAmbientVolume);
 	}
 
 	// ── カウントダウン開始：世界停止 + HUD にカウントダウン数字を表示 ──
@@ -164,6 +173,19 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 		return;
 	}
 
+	// ── 最終リザルト前の溜め（BGM のみ残して静止中） ─────
+	if (bIsBuildingUpFinalResult)
+	{
+		FinalBuildupElapsed += RealDelta;
+		if (FinalBuildupElapsed >= FinalResultBuildupTime)
+		{
+			FinalBuildupElapsed       = 0.f;
+			bIsBuildingUpFinalResult  = false;
+			ShowFinalResult();
+		}
+		return;
+	}
+
 	// ── ミッション残り時間 ──────────────────────────────
 	UpdateStylishGauge(RealDelta);
 
@@ -203,7 +225,7 @@ void ATomatinaGameMode::StartMission(int32 Index)
 
 	if (Index >= Missions.Num())
 	{
-		ShowFinalResult();
+		BeginFinalResultBuildup();
 		return;
 	}
 
@@ -347,6 +369,9 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		UGameplayStatics::PlaySound2D(this, ShutterSound);
 	}
 
+	// ⑤' ファンファーレ（今回の撮影スコアに応じて音を変える）
+	PlayFanfareForShotScore(Score);
+
 	// ⑥ ミッションタイマーを止める
 	RemainingTime = -1.f;
 
@@ -362,6 +387,104 @@ void ATomatinaGameMode::TakePhoto(USceneCaptureComponent2D* ZoomCamera)
 		HUD->UpdateTotalScore(TotalScore);
 	}
 	PushStylishStateToHUD();
+}
+
+// =============================================================================
+// BeginFinalResultBuildup — 全ミッション終了後、リザルト表示前の「溜め」
+// BGM 以外の音停止、汚れ全削除、ミッション UI を隠して FinalResultBuildupTime 秒待つ
+// =============================================================================
+void ATomatinaGameMode::BeginFinalResultBuildup()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode::BeginFinalResultBuildup (%.2fs)"),
+		FinalResultBuildupTime);
+
+	bIsBuildingUpFinalResult = true;
+	FinalBuildupElapsed      = 0.f;
+
+	// 世界停止（BGM・HUD Tick は実時間で動く）
+	if (GetWorld())
+	{
+		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.0f);
+	}
+
+	// BGM 以外のすべての音を停止
+	StopAllSoundsExceptBGM();
+
+	// 汚れ全削除
+	if (ATomatoDirtManager* DirtMgr = GetDirtManager())
+	{
+		DirtMgr->ClearAllDirts();
+	}
+
+	// ミッション UI を隠す（タイマー・スコアが残らないように）
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->HideMissionDisplay();
+	}
+
+	// 溜め時間が 0 以下なら即座にリザルト表示
+	if (FinalResultBuildupTime <= 0.f)
+	{
+		bIsBuildingUpFinalResult = false;
+		ShowFinalResult();
+	}
+}
+
+// =============================================================================
+// PlayFanfareForShotScore — 撮影スコアに応じたファンファーレを再生
+// FanfareTiers から MinScore <= ShotScore を満たすものの中で最大 MinScore を採用
+// =============================================================================
+void ATomatinaGameMode::PlayFanfareForShotScore(int32 ShotScore)
+{
+	if (FanfareTiers.Num() == 0) { return; }
+
+	const FFanfareTier* Chosen = nullptr;
+	int32 BestMin = INT32_MIN;
+	for (const FFanfareTier& Tier : FanfareTiers)
+	{
+		if (Tier.Sound == nullptr) { continue; }
+		if (Tier.MinScore <= ShotScore && Tier.MinScore > BestMin)
+		{
+			BestMin = Tier.MinScore;
+			Chosen  = &Tier;
+		}
+	}
+
+	if (!Chosen || !Chosen->Sound) { return; }
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ATomatinaGameMode::PlayFanfareForShotScore: Score=%d → MinScore=%d Sound=%s"),
+		ShotScore, Chosen->MinScore, *GetNameSafe(Chosen->Sound));
+
+	UGameplayStatics::PlaySound2D(this, Chosen->Sound,
+		Chosen->VolumeMultiplier, Chosen->PitchMultiplier);
+}
+
+// =============================================================================
+// StopAllSoundsExceptBGM
+// BGMAudioComp を除く全 UAudioComponent を停止する
+// =============================================================================
+void ATomatinaGameMode::StopAllSoundsExceptBGM()
+{
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+
+	int32 StoppedCount = 0;
+	for (TObjectIterator<UAudioComponent> It; It; ++It)
+	{
+		UAudioComponent* Comp = *It;
+		if (!IsValid(Comp))                 { continue; }
+		if (Comp->GetWorld() != World)      { continue; }
+		if (Comp == BGMAudioComp)           { continue; }
+		if (!Comp->IsPlaying())             { continue; }
+
+		Comp->Stop();
+		++StoppedCount;
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::StopAllSoundsExceptBGM: %d 個のサウンドを停止"),
+		StoppedCount);
 }
 
 // =============================================================================

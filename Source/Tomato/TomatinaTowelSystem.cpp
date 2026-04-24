@@ -2,10 +2,12 @@
 
 #include "TomatinaTowelSystem.h"
 
+#include "Components/AudioComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Sound/SoundBase.h"
 
 #include "TomatoDirtManager.h"
 #include "TomatinaPlayerPawn.h"
@@ -65,6 +67,9 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		bTowelVisible    = false;
 		bTowelInZoomView = false;
 
+		// 拭き音を止める（手が離れたら即停止）
+		UpdateWipeSound(false);
+
 		if (HUD) { HUD->HideCursor(); }
 		return;
 	}
@@ -85,6 +90,9 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	if (bIsSwapping)
 	{
 		bTowelInZoomView = false;
+		// 交換中は拭けないので音も止める
+		UpdateWipeSound(false);
+
 		SwapTimer -= DeltaTime;
 		if (SwapTimer <= 0.f)
 		{
@@ -98,6 +106,7 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 
 	// 拭き取り処理
 	const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
+	UpdateWipeSound(bIsWiping);
 
 	if (bIsWiping)
 	{
@@ -206,4 +215,37 @@ ATomatinaPlayerPawn* ATomatinaTowelSystem::GetPlayerPawn()
 		}
 	}
 	return CachedPlayerPawn;
+}
+
+// =============================================================================
+// UpdateWipeSound — 拭き状態のエッジ検出でループ SE を開始・停止
+// =============================================================================
+
+void ATomatinaTowelSystem::UpdateWipeSound(bool bIsWiping)
+{
+	if (bIsWiping == bWasWiping)
+	{
+		return; // 状態変化なし
+	}
+	bWasWiping = bIsWiping;
+
+	if (bIsWiping)
+	{
+		if (!WipeLoopSound) { return; }
+		// 既に再生中なら何もしない
+		if (WipeAudioComp && WipeAudioComp->IsPlaying())
+		{
+			return;
+		}
+		WipeAudioComp = UGameplayStatics::SpawnSound2D(
+			this, WipeLoopSound, WipeLoopVolume, WipeLoopPitch);
+	}
+	else
+	{
+		if (WipeAudioComp && WipeAudioComp->IsPlaying())
+		{
+			WipeAudioComp->Stop();
+		}
+		WipeAudioComp = nullptr;
+	}
 }

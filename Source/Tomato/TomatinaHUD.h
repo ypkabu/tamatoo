@@ -223,6 +223,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="HUD|Flash")
 	void PlayShutterFlash();
 
+	/** シャッターフラッシュの表示時間（秒）。微調整用 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Flash", meta=(ClampMin="0.01", ClampMax="2.0"))
+	float ShutterFlashDuration = 0.2f;
+
+	/** シャッターフラッシュの Z-Order。汚れ等より最前面に出すため大きい値。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Flash")
+	int32 ShutterFlashZOrder = 9999;
+
 	// =========================================================================
 	// 汚れ（C++ で位置操作する例外2）
 	// =========================================================================
