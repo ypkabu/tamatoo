@@ -11,6 +11,8 @@
 class USkeletalMeshComponent;
 class UAnimMontage;
 class ATomatinaProjectile;
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 移動・状態
@@ -171,6 +173,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Dirt")
 	FName DirtParameterName = TEXT("DirtAmount");
 
+	/**
+	 * 汚れオーバーレイ用マテリアル（SkeletalMeshComponent::SetOverlayMaterial に流し込む）。
+	 * 1 つ作って割り当てるだけで、元キャラのマテリアルを改造しなくても汚れが乗る。
+	 * 推奨設定は ATomatinaCrowdMember::DirtOverlayMaterial のコメント参照。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Dirt")
+	UMaterialInterface* DirtOverlayMaterial = nullptr;
+
 	UPROPERTY(BlueprintReadOnly, Category="Thrower|Dirt")
 	float CurrentDirtAmount = 0.f;
 
@@ -216,4 +226,11 @@ private:
 
 	void TickWalk(float DeltaTime);
 	void TickActive(float DeltaTime);
+
+	/** DirtOverlayMaterial をオーバーレイとして適用し、DMI をキャッシュする */
+	void ApplyDirtOverlay();
+
+	/** 汚れ用 Dynamic Material Instance（DirtOverlayMaterial を有効にした場合のみ） */
+	UPROPERTY()
+	UMaterialInstanceDynamic* DirtOverlayMID = nullptr;
 };

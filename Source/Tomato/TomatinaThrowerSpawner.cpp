@@ -107,11 +107,14 @@ ATomatinaThrower* ATomatinaThrowerSpawner::SpawnThrowerNow()
 	const FVector    SpawnLoc = ComputeSpawnLocation(Edge);
 	const FVector    DestLoc  = ComputeWalkDestination();
 
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	ATomatinaThrower* Thrower = World->SpawnActor<ATomatinaThrower>(
-		Cls, SpawnLoc, FRotator::ZeroRotator, Params);
+	// Deferred spawn にして BeginPlay 前に DirtOverlayMaterial を流し込む
+	const FTransform SpawnTransform(FRotator::ZeroRotator, SpawnLoc);
+	ATomatinaThrower* Thrower = World->SpawnActorDeferred<ATomatinaThrower>(
+		Cls,
+		SpawnTransform,
+		this,
+		nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 
 	if (!Thrower)
 	{
@@ -122,6 +125,14 @@ ATomatinaThrower* ATomatinaThrowerSpawner::SpawnThrowerNow()
 	// 共有狙い候補を引き継ぐ
 	Thrower->SceneryAimActors    = SceneryAimActors;
 	Thrower->SceneryAimLocations = SceneryAimLocations;
+
+	// Thrower 個体未指定ならスポナーの値を使う（個体上書きを尊重）
+	if (!Thrower->DirtOverlayMaterial && DirtOverlayMaterial)
+	{
+		Thrower->DirtOverlayMaterial = DirtOverlayMaterial;
+	}
+
+	Thrower->FinishSpawning(SpawnTransform);
 
 	Thrower->BeginWalkIn(DestLoc);
 

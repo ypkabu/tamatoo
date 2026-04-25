@@ -114,22 +114,61 @@ void ATomatinaGameMode::BeginPlay()
 			this, CrowdAmbient, CrowdAmbientVolume);
 	}
 
-	// ── カウントダウン開始：世界停止 + HUD にカウントダウン数字を表示 ──
+	// ── ロード開始：世界停止 + HUD に「ロード中...」を表示 ──
+	// 必要アクター（TargetSpawner / DirtManager 等）が揃い、かつ LoadingHoldSeconds 経過後に
+	// カウントダウンへ遷移する（IsLoadingComplete / Tick 参照）
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.0f);
 
+	bIsLoading     = true;
+	bInCountdown   = false;
+	LoadingElapsed = 0.f;
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->ShowLoading();
+	}
+	PushStylishStateToHUD();
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode::BeginPlay: ロード開始 Missions=%d Hold=%.2fs"),
+		Missions.Num(), LoadingHoldSeconds);
+}
+
+// =============================================================================
+// IsLoadingComplete — Spawner 等の準備完了 + 保持秒数経過
+// =============================================================================
+bool ATomatinaGameMode::IsLoadingComplete() const
+{
+	if (LoadingElapsed < LoadingHoldSeconds) { return false; }
+
+	// レベルに必須のアクターが揃っているかを確認。
+	// （ATomatoDirtManager は GetDirtManager() がキャッシュを埋めるため非 const にできない。
+	//   ここではロード中のみ呼ぶ Tick 側で揃いを判定するので、最低限 TargetSpawner を見る）
+	if (!TargetSpawner) { return false; }
+
+	return true;
+}
+
+// =============================================================================
+// BeginCountdownAfterLoading — 「ロード中...」を消してカウントダウン 3 から開始
+// =============================================================================
+void ATomatinaGameMode::BeginCountdownAfterLoading()
+{
+	bIsLoading          = false;
 	bInCountdown        = true;
 	CountdownRemaining  = 3.0f;
 	LastCountdownSecond = 3;
 
 	if (ATomatinaHUD* HUD = GetTomatinaHUD())
 	{
+		HUD->HideLoading();
 		HUD->ShowCountdown(3);
 	}
-	PushStylishStateToHUD();
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaGameMode::BeginPlay: カウントダウン開始 Missions=%d"),
-		Missions.Num());
+	// 1 秒目の SE もここで鳴らす（カウントダウン Tick は次フレームから）
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownTickSound);
+
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode: カウントダウン開始"));
 }
 
 // =============================================================================
@@ -140,6 +179,20 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	const float RealDelta = FApp::GetDeltaTime();
+
+	// ── ロード中 ───────────────────────────────────────
+	// 「ロード中...」表示。LoadingHoldSeconds 経過 + 必要アクター揃いで
+	// カウントダウンへ遷移する。
+	if (bIsLoading)
+	{
+		LoadingElapsed += RealDelta;
+
+		if (IsLoadingComplete())
+		{
+			BeginCountdownAfterLoading();
+		}
+		return;
+	}
 
 	// ── カウントダウン中 ───────────────────────────────
 	if (bInCountdown)

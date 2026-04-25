@@ -116,11 +116,24 @@ ATomatinaCrowdMember* ATomatinaCrowdManager::SpawnOne(TSubclassOf<ATomatinaCrowd
 	const FVector Loc = PickSpawnLocation();
 	const FRotator Rot(0.f, FMath::FRandRange(0.f, 360.f), 0.f);
 
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	ATomatinaCrowdMember* M = World->SpawnActor<ATomatinaCrowdMember>(Cls, Loc, Rot, Params);
+	// Deferred spawn にして BeginPlay 前に DirtOverlayMaterial を流し込む。
+	// （メンバー側の ApplyDirtOverlay は BeginPlay で動くため、ここで先に値を渡しておく）
+	FTransform SpawnTransform(Rot, Loc);
+	ATomatinaCrowdMember* M = World->SpawnActorDeferred<ATomatinaCrowdMember>(
+		Cls,
+		SpawnTransform,
+		this,
+		nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 	if (!M) { return nullptr; }
+
+	// メンバー側が未指定ならマネージャーの値を使う（個体上書きを尊重）
+	if (!M->DirtOverlayMaterial && DirtOverlayMaterial)
+	{
+		M->DirtOverlayMaterial = DirtOverlayMaterial;
+	}
+
+	M->FinishSpawning(SpawnTransform);
 
 	const FVector Center = GetActorLocation() + FVector(0.f, 0.f, GroundZOffset);
 	M->InitializeFromManager(Center, AreaExtent);

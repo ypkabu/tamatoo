@@ -290,7 +290,16 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category="Tomatina|Stylish")
 	void OnHighStylishShot(ATomatinaTargetBase* Target, EStylishRank Rank, int32 ShotScore);
 
+	// ── ロード演出 ────────────────────────────────────────────
+	/** ロード画面を最低限保持する秒数。Spawner 等の準備完了に加えて、この時間が経過してからカウントダウンへ移る */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomatina|Loading", meta=(ClampMin="0.0", ClampMax="10.0"))
+	float LoadingHoldSeconds = 1.2f;
+
 	// ── 内部状態 ──────────────────────────────────────────────
+	/** ロード中（カウントダウン前の「ロード中...」表示中） */
+	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
+	bool bIsLoading = false;
+
 	UPROPERTY(BlueprintReadOnly, Category="Tomatina|State")
 	bool bInCountdown = false;
 
@@ -324,6 +333,15 @@ private:
 	// ── カウントダウン ───────────────────────────────────────
 	float CountdownRemaining = 0.f;
 	int32 LastCountdownSecond = -1;
+
+	// ── ロード ───────────────────────────────────────────────
+	float LoadingElapsed = 0.f;
+
+	/** ロード完了判定。必要アクターが全部揃っていて最低保持秒数を満たしたら true */
+	bool IsLoadingComplete() const;
+
+	/** ロード→カウントダウンへの遷移処理 */
+	void BeginCountdownAfterLoading();
 
 	// ── リザルト計時（FApp::GetDeltaTime 累積） ──────────────
 	float ResultElapsed = 0.f;

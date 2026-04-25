@@ -7,6 +7,8 @@
 #include "TomatinaCrowdMember.generated.h"
 
 class USkeletalMeshComponent;
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 行動状態
@@ -142,6 +144,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt")
 	FName DirtParameterName = TEXT("DirtAmount");
 
+	/**
+	 * 汚れオーバーレイ用マテリアル（UE5 の SkeletalMeshComponent::SetOverlayMaterial を使用）。
+	 * これを 1 つ作って割り当てるだけで、各キャラの元マテリアルを改造しなくても
+	 * 上から汚れが乗るようになる。
+	 *
+	 * 推奨マテリアル設定:
+	 *   Material Domain   = Surface
+	 *   Blend Mode        = Translucent
+	 *   Shading Model     = Unlit
+	 *   ScalarParameter   = "DirtAmount" (default 0)
+	 *   Constant3Vector(茶色) → Emissive Color
+	 *   DirtAmount → Opacity
+	 *
+	 * Manager 経由でスポーンする場合は ATomatinaCrowdManager 側に同名のフィールドがあり、
+	 * メンバー個体が未設定ならマネージャーの値が自動で使われる。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt")
+	UMaterialInterface* DirtOverlayMaterial = nullptr;
+
 	/** 現在の汚れ量（BP 読取） */
 	UPROPERTY(BlueprintReadOnly, Category="Crowd|Dirt")
 	float CurrentDirtAmount = 0.f;
@@ -192,4 +213,11 @@ private:
 	FVector PickRandomPointInArea();
 	FVector PickNextPacingTarget();
 	void TickMovement(float DeltaTime);
+
+	/** DirtOverlayMaterial をオーバーレイとして適用し、DMI をキャッシュする */
+	void ApplyDirtOverlay();
+
+	/** 汚れ用の Dynamic Material Instance（DirtOverlayMaterial を有効にした場合のみ） */
+	UPROPERTY()
+	UMaterialInstanceDynamic* DirtOverlayMID = nullptr;
 };
