@@ -3,6 +3,8 @@
 #include "TomatinaCrowdMember.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 // =============================================================================
 // コンストラクタ
@@ -32,6 +34,11 @@ ATomatinaCrowdMember::ATomatinaCrowdMember()
 void ATomatinaCrowdMember::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 汚れオーバーレイを適用（DirtOverlayMaterial が設定されているときのみ）。
+	// 既存マテリアルに DirtAmount Scalar Parameter を仕込まずに、
+	// 1 個の汚れマテリアルで全キャラに対応するための仕組み。
+	ApplyDirtOverlay();
 
 	// 遮蔽判定で二重保険として HidingProp タグを付与
 	// （CheckVisibility 側で HidingProp Actor は遮蔽とみなされる）
@@ -80,7 +87,17 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 	{
 		const float Rate = MaxDirtAmount / DirtAccumulationTime;
 		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * DeltaTime, MaxDirtAmount);
-		MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+
+		// オーバーレイ方式（推奨）：DMI に直接書く
+		if (DirtOverlayMID)
+		{
+			DirtOverlayMID->SetScalarParameterValue(DirtParameterName, CurrentDirtAmount);
+		}
+		else
+		{
+			// フォールバック：旧方式（各マテリアルに DirtAmount を仕込んでいる場合）
+			MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+		}
 	}
 
 	if (StartJitterTimer > 0.f)
@@ -337,4 +354,22 @@ void ATomatinaCrowdMember::InitializeFromManager(FVector Center, FVector Extent)
 	{
 		WanderTarget = PickRandomPointInArea();
 	}
+}
+
+// =============================================================================
+// ApplyDirtOverlay
+// SkeletalMeshComponent::SetOverlayMaterial に汚れ用 DMI を流し込む。
+// 元のキャラ用マテリアルには手を加えない。
+// =============================================================================
+void ATomatinaCrowdMember::ApplyDirtOverlay()
+{
+	if (!MeshComp || !DirtOverlayMaterial) { return; }
+
+	DirtOverlayMID = UMaterialInstanceDynamic::Create(DirtOverlayMaterial, this);
+	if (!DirtOverlayMID) { return; }
+
+	// 初期値 0（汚れなし）
+	DirtOverlayMID->SetScalarParameterValue(DirtParameterName, 0.f);
+
+	MeshComp->SetOverlayMaterial(DirtOverlayMID);
 }

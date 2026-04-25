@@ -1073,6 +1073,38 @@ void ATomatinaHUD::HideCountdown()
 }
 
 // =============================================================================
+// ShowLoading / HideLoading — WBP_Loading
+// カウントダウン前に「ロード中...」を表示する。
+// =============================================================================
+void ATomatinaHUD::ShowLoading()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowLoading"));
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !LoadingWidgetClass) { return; }
+
+	if (!LoadingWidget)
+	{
+		LoadingWidget = CreateWidget<UUserWidget>(PC, LoadingWidgetClass);
+		// カウントダウン (Z=400) よりも前面に出す
+		if (LoadingWidget) { LoadingWidget->AddToViewport(500); }
+	}
+	if (!LoadingWidget) { return; }
+
+	LoadingWidget->SetVisibility(ESlateVisibility::Visible);
+}
+
+void ATomatinaHUD::HideLoading()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideLoading"));
+	if (LoadingWidget)
+	{
+		LoadingWidget->RemoveFromParent();
+		LoadingWidget = nullptr;
+	}
+}
+
+// =============================================================================
 // PlayShutterFlash — WBP_ShutterFlash を 0.1 秒だけ表示
 // =============================================================================
 void ATomatinaHUD::PlayShutterFlash()

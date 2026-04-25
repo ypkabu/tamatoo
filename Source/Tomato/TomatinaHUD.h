@@ -60,6 +60,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> CountdownWidgetClass;
 
+	/** 「ロード中...」表示用 Widget（カウントダウン前に出す）。
+	 *  推奨階層:
+	 *    Root: CanvasPanel (Fill, 半透明黒の背景 Image)
+	 *      - TXT_Loading (TextBlock) — 「ロード中...」
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
+	TSubclassOf<UUserWidget> LoadingWidgetClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> TestPipWidgetClass;
 
@@ -235,6 +243,15 @@ public:
 	void HideCountdown();
 
 	// =========================================================================
+	// ロード中表示
+	// =========================================================================
+	UFUNCTION(BlueprintCallable, Category="HUD|Loading")
+	void ShowLoading();
+
+	UFUNCTION(BlueprintCallable, Category="HUD|Loading")
+	void HideLoading();
+
+	// =========================================================================
 	// シャッターフラッシュ
 	// =========================================================================
 	UFUNCTION(BlueprintCallable, Category="HUD|Flash")
@@ -280,6 +297,7 @@ protected:
 	UPROPERTY() UUserWidget* FinalResultWidget    = nullptr;
 	UPROPERTY() UUserWidget* CountdownWidget      = nullptr;
 	UPROPERTY() UUserWidget* ShutterFlashWidget   = nullptr;
+	UPROPERTY() UUserWidget* LoadingWidget        = nullptr;
 
 private:
 	// シャッターフラッシュの実時間タイマー（TimeDilation=0 でも動く）

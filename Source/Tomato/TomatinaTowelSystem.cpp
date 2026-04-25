@@ -36,7 +36,12 @@ void ATomatinaTowelSystem::BeginPlay()
 	CurrentDurability = MaxDurability;
 
 	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f"), CurrentDurability);
+		TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f MinSpeedToWipe=%.2f WipeRadius=%.3f"),
+		CurrentDurability, MinSpeedToWipe, WipeRadius);
+
+	// [DIAG] パッケージ確認用：自分が生きていることのマーカー
+	UE_LOG(LogTemp, Warning,
+		TEXT("[TowelDiag] ATomatinaTowelSystem started — もし以後 [TowelDiag] UpdateHandData が出なければ BP 側が UpdateHandData を呼んでいない"));
 }
 
 // =============================================================================
@@ -48,6 +53,19 @@ void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPositi
 	bHandDetected      = bDetected;
 	HandScreenPosition = ScreenPosition;
 	HandSpeed          = Speed;
+
+	// [DIAG] パッケージ版でも残るように Warning レベル。1秒に1回だけ出力（毎フレームはスパム）
+	static double LastDiagTime = 0.0;
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastDiagTime > 1.0)
+	{
+		LastDiagTime = Now;
+		UE_LOG(LogTemp, Warning,
+			TEXT("[TowelDiag] UpdateHandData Detected=%d Pos=(%.3f,%.3f) Speed=%.2f (MinSpeedToWipe=%.1f)"),
+			bDetected ? 1 : 0,
+			ScreenPosition.X, ScreenPosition.Y,
+			Speed, MinSpeedToWipe);
+	}
 }
 
 // =============================================================================
@@ -111,6 +129,19 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
 	UpdateWipeSound(bIsWiping);
 
+	// [DIAG] 拭き状態が変化した瞬間だけログ
+	{
+		static bool bDiagWasWiping = false;
+		if (bIsWiping != bDiagWasWiping)
+		{
+			bDiagWasWiping = bIsWiping;
+			UE_LOG(LogTemp, Warning,
+				TEXT("[TowelDiag] WipingState=%s HandSpeed=%.2f Min=%.2f"),
+				bIsWiping ? TEXT("ON") : TEXT("OFF"),
+				HandSpeed, MinSpeedToWipe);
+		}
+	}
+
 	if (bIsWiping)
 	{
 		CurrentDurability -= DurabilityDrainRate * DeltaTime;
@@ -119,6 +150,28 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		if (ATomatoDirtManager* DirtMgr = GetDirtManager())
 		{
 			DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Amount);
+
+			// [DIAG] 1秒に1回だけ拭き量と DirtMgr 取得状態を出す
+			static double LastWipeDiagTime = 0.0;
+			const double Now2 = FPlatformTime::Seconds();
+			if (Now2 - LastWipeDiagTime > 1.0)
+			{
+				LastWipeDiagTime = Now2;
+				UE_LOG(LogTemp, Warning,
+					TEXT("[TowelDiag] Wipe Amount=%.4f Pos=(%.3f,%.3f) Radius=%.3f DirtMgr=OK"),
+					Amount, HandScreenPosition.X, HandScreenPosition.Y, WipeRadius);
+			}
+		}
+		else
+		{
+			static double LastNoMgrLogTime = 0.0;
+			const double Now3 = FPlatformTime::Seconds();
+			if (Now3 - LastNoMgrLogTime > 2.0)
+			{
+				LastNoMgrLogTime = Now3;
+				UE_LOG(LogTemp, Warning,
+					TEXT("[TowelDiag] Wiping but DirtManager=NULL（レベルに ATomatoDirtManager 配置されてない可能性）"));
+			}
 		}
 
 		if (CurrentDurability <= 0.f)

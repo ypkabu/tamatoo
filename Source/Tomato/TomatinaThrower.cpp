@@ -9,6 +9,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 #include "TomatinaFunctionLibrary.h"
 #include "TomatinaProjectile.h"
@@ -32,6 +34,9 @@ ATomatinaThrower::ATomatinaThrower()
 void ATomatinaThrower::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 汚れオーバーレイ適用（DirtOverlayMaterial が設定されているときのみ）
+	ApplyDirtOverlay();
 
 	StartDelayTimer   = StartDelay;
 	bStartDelayActive = (StartDelay > 0.f);
@@ -62,7 +67,15 @@ void ATomatinaThrower::Tick(float DeltaTime)
 	{
 		const float Rate = MaxDirtAmount / DirtAccumulationTime;
 		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * DeltaTime, MaxDirtAmount);
-		MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+
+		if (DirtOverlayMID)
+		{
+			DirtOverlayMID->SetScalarParameterValue(DirtParameterName, CurrentDirtAmount);
+		}
+		else
+		{
+			MeshComp->SetScalarParameterValueOnMaterials(DirtParameterName, CurrentDirtAmount);
+		}
 	}
 
 	switch (State)
@@ -345,4 +358,21 @@ FVector ATomatinaThrower::GetPlayerLocation() const
 		}
 	}
 	return GetActorLocation() + GetActorForwardVector() * 1500.f;
+}
+
+// =============================================================================
+// ApplyDirtOverlay
+// SkeletalMeshComponent::SetOverlayMaterial に汚れ用 DMI を流し込む。
+// 元のキャラ用マテリアルには手を加えない。
+// =============================================================================
+void ATomatinaThrower::ApplyDirtOverlay()
+{
+	if (!MeshComp || !DirtOverlayMaterial) { return; }
+
+	DirtOverlayMID = UMaterialInstanceDynamic::Create(DirtOverlayMaterial, this);
+	if (!DirtOverlayMID) { return; }
+
+	DirtOverlayMID->SetScalarParameterValue(DirtParameterName, 0.f);
+
+	MeshComp->SetOverlayMaterial(DirtOverlayMID);
 }

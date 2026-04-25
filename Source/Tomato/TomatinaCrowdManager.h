@@ -7,6 +7,7 @@
 #include "TomatinaCrowdManager.generated.h"
 
 class ATomatinaCrowdMember;
+class UMaterialInterface;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 群衆種類定義
@@ -64,6 +65,27 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Variants")
 	TArray<FCrowdVariant> Variants;
+
+	// =========================================================================
+	// 汚れオーバーレイ
+	// =========================================================================
+
+	/**
+	 * 全スポーン群衆に共通で適用する汚れオーバーレイマテリアル。
+	 * これを 1 個割り当てるだけで、全キャラの元マテリアルを改造せず汚れが乗る。
+	 * メンバー個体側で DirtOverlayMaterial が空のときだけマネージャーの値が使われる
+	 * （個体側で別マテリアルを上書きしたい場合は個体の BP で指定）。
+	 *
+	 * 推奨マテリアル設定:
+	 *   Material Domain   = Surface
+	 *   Blend Mode        = Translucent
+	 *   Shading Model     = Unlit
+	 *   ScalarParameter   = "DirtAmount" (default 0)
+	 *   Constant3Vector(茶色 例 0.18,0.10,0.05) → Emissive Color
+	 *   DirtAmount → Opacity
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Dirt")
+	UMaterialInterface* DirtOverlayMaterial = nullptr;
 
 	// =========================================================================
 	// API

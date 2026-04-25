@@ -8,6 +8,7 @@
 
 class ATomatinaThrower;
 class UBoxComponent;
+class UMaterialInterface;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 投擲手のバリアント定義（強さプリセット）
@@ -143,6 +144,17 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Aim")
 	TArray<FVector> SceneryAimLocations;
+
+	// =========================================================================
+	// 汚れオーバーレイ
+	// =========================================================================
+	/**
+	 * 全スポーン Thrower に共通で適用する汚れオーバーレイマテリアル。
+	 * Thrower 個体側で DirtOverlayMaterial が空のときだけスポナーの値が使われる。
+	 * 推奨設定は ATomatinaCrowdManager::DirtOverlayMaterial のコメント参照。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Dirt")
+	UMaterialInterface* DirtOverlayMaterial = nullptr;
 
 	// =========================================================================
 	// API
