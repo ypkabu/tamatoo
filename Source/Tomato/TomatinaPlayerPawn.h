@@ -157,6 +157,7 @@ protected:
 	void OnRightMouseReleased(const FInputActionValue& Value);
 	void OnLeftMousePressed(const FInputActionValue& Value);
 	void OnLook(const FInputActionValue& Value);
+	void CenterCursorOnMainScreen();
 
 private:
 	UPROPERTY()

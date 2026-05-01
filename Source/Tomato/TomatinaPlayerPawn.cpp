@@ -13,6 +13,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Widgets/SWindow.h"
 
@@ -149,8 +150,9 @@ void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInput
 	{
 		EIC->BindAction(IA_Look, ETriggerEvent::Triggered, this, &ATomatinaPlayerPawn::OnLook);
 	}
+	PlayerInputComponent->BindKey(EKeys::C, IE_Pressed, this, &ATomatinaPlayerPawn::CenterCursorOnMainScreen);
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: Input バインド R=%s L=%s Look=%s"),
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: Input バインド R=%s L=%s Look=%s Center=C"),
 		IA_RightMouse ? TEXT("OK") : TEXT("NULL"),
 		IA_LeftMouse  ? TEXT("OK") : TEXT("NULL"),
 		IA_Look       ? TEXT("OK") : TEXT("NULL"));
@@ -464,6 +466,22 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 void ATomatinaPlayerPawn::OnLook(const FInputActionValue& Value)
 {
 	CurrentLookInput += Value.Get<FVector2D>();
+}
+
+void ATomatinaPlayerPawn::CenterCursorOnMainScreen()
+{
+	if (!PC)
+	{
+		return;
+	}
+
+	const int32 CenterX = FMath::RoundToInt(MainWidth * 0.5f);
+	const int32 CenterY = FMath::RoundToInt(MainHeight * 0.5f);
+	PC->SetMouseLocation(CenterX, CenterY);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaPlayerPawn::CenterCursorOnMainScreen: カーソルをメイン中央(%d,%d)へ移動"),
+		CenterX, CenterY);
 }
 
 void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
