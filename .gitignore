@@ -42,6 +42,15 @@
 *.VC.opendb
 .vsconfig
 
+# VSCode / UBT generated compile command files
+.vscode/compileCommands*/
+.vscode/compileCommands_*.json
+
+# User / temporary files
+*.log
+*.tmp
+*.user
+
 # Precompiled Assets
 SourceArt/**/*.png
 SourceArt/**/*.tga
@@ -73,6 +82,10 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# Editor-only personal content
+Content/Developers/*
+Content/Collections/*
 
 # Environment files
 .env
