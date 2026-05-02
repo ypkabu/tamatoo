@@ -145,3 +145,12 @@
 - イラストくん ご利用について: https://illustkun.com/about-use/
 - The Noun Project license help: https://help.thenounproject.com/hc/en-us/articles/200509798-What-licenses-do-you-offer-for-icons
 
+## 生成AIの利用について
+
+本制作では、プログラミングやデバッグの補助として Claude Code を利用しました。
+
+主な用途は、実装方針を整理した後のコード案作成、既存コードの整理、エラー原因の仮説出しです。  
+汚れシステム、Leap Motion Controller による拭き取り判定、スマホ側の RenderTarget 表示まわりの実装で参考にしました。
+
+ただし、仕様設計、パラメータ調整、実機検証、最終的な採用判断は自分で行いました。  
+生成されたコードは内容を理解した上で修正し、実機で動作確認したもののみ取り込んでいます。
