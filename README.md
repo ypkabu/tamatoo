@@ -111,4 +111,38 @@
 
 ## ライセンス
 
-要確認
+このリポジトリ内のコードおよび自作素材のライセンスは未設定です。第三者アセットは各配布元・購入元のライセンスに従い、本 README の記載はライセンス条件そのものを置き換えるものではありません。
+
+### 使用アセット・外部素材
+
+| 種別 | 配置場所 / ファイル | 出典・ライセンス確認 |
+|------|---------------------|----------------------|
+| Unreal Engine テンプレート / Starter 系素材 | `Content/FirstPerson/`, `Content/LevelPrototyping/`, `Content/Characters/Mannequins/`, `Content/Input/` | Epic Games / Unreal Engine 付属コンテンツ。Unreal Engine EULA / Epic Content License の範囲で使用。 |
+| Fab / Unreal Marketplace / Quixel 系 3D アセット | `Content/Fab/Gorilla/`, `Content/Fab/Megascans/3D/Trash_Bag_Pack_ve2hddjga/`, `Content/MSPresets/`, `Content/Fantastic_Dungeon_Pack/`, `Content/LowPolyMarket/`, `Content/ModularBuildingSet/`, `Content/RPGHeroSquad/`, `Content/Scanned3DPeoplePack/`, `Content/UFO/` | Fab Standard License または取得時の Marketplace ライセンスに従う。Fab Standard License は、プロジェクトへ組み込んだ形での商用/私的利用を許可する一方、アセット単体の再配布・再販売は禁止。 |
+| Fab / Megascans 由来と思われる街小物 | `Content/mono/gomi/`, `Content/mono/Firehydrant/`, `Content/mono/gomibako/` | `Trash_Bag_Pack_ve2hddjga` は Megascans 系と一致。消火栓・ゴミ箱は出典名がファイル名だけでは未特定のため、公開前に取得元を再確認すること。 |
+| Ultraleap Tracking Plugin | `Plugins/UltraleapTracking_ue5_4-5.0.1/` | Ultraleap Unreal Plugin。GitHub 版は Apache License 2.0。実機利用には Ultraleap Tracking Software / SDK 側の条件も確認すること。 |
+| Freesound 環境音 | `Content/Sound/755969__lastraindrop__evening-food-market-atmosphere-at-street-side.uasset` | Freesound: “Evening food market atmosphere at street side” by `lastraindrop`。Creative Commons 0 (CC0)。 |
+| ニコニ・コモンズ由来と思われる音源 | `Content/Sound/nc146963.uasset` | `nc146963` という ID からニコニ・コモンズ素材と推定。素材ページの利用条件を公開前に再確認すること。 |
+| その他サウンド | `Content/Sound/*.uasset`, `Content/Sounds/*.uasset`, `Content/Sounds/Background/BGM182-161031-banbanjikenpou-wav.uasset` | `MainBGM`, `Title_BGM`, `Dram`, `Exelent`, `Nice`, `rakutan`, `Shutter`, `Bubble`, `LaserGun`, `Shot`, `Squish`, `Waping` など。ファイル名だけでは配布元を特定できないものがあるため、公開・配布前に取得元と利用条件を確認すること。 |
+| Pngtree 画像素材 | `Content/Assets/—Pngtree—white_crumpled_towel_after_use_13244949.uasset`, `Content/Tomato_Asset/pngtree-blood-splatter-drop-png-image_13534558.uasset` | Pngtree License Terms に従う。プラン種別や利用範囲により条件が変わるため、配布・公開前にアカウント側の取得ライセンスを確認すること。 |
+| イラストくん素材 | `Content/Assets/illustkun-03200-tomato.uasset`, `Content/Assets/illustkun-03200-tomato_Sprite.uasset` | イラストくん利用規約に従う。個人・法人利用、商用利用は規約範囲内で可。素材自体の再配布・販売は禁止。 |
+| The Noun Project アイコン | `Content/Assets/noun-focus-point-4695835.uasset` | The Noun Project 素材。無料利用時は CC BY 表記が必要、購入/サブスクリプション取得時はロイヤリティフリー条件になるため、取得形態を確認すること。 |
+| Google Gemini 生成画像 | `Content/Assets/Gemini_Generated_Image_*.uasset` | Gemini で生成した画像。Google の利用規約・禁止用途ポリシーに従う。公開時は、第三者の権利侵害がないか目視確認すること。 |
+| 出典未特定の画像 / 3D モデル | `Content/Assets/23005347*.uasset`, `Content/Assets/background02.uasset`, `Content/Assets/Home.uasset`, `Content/pictures/*.uasset`, `Content/Tomato_Asset/uploads_files_5545752_tomato_oshinchan_model*.uasset`, `Content/Title/Asset/*.uasset` など | 現時点ではファイル名だけで配布元・利用条件を確定できない。外部公開・配布前に、元データの取得元とライセンスを確認すること。 |
+
+### 参照した主なライセンス情報
+
+- Fab Standard License: https://www.fab.com/eula
+- Fab / Quixel Megascans: https://www.fab.com/sellers/Quixel%20Megascans/about
+- Ultraleap Unreal Plugin: https://github.com/ultraleap/UnrealPlugin
+- Freesound `755969`: https://freesound.org/people/lastraindrop/sounds/755969/
+- Pngtree License Terms: https://pngtree.com/legal/terms-of-license
+- イラストくん ご利用について: https://illustkun.com/about-use/
+- The Noun Project license help: https://help.thenounproject.com/hc/en-us/articles/200509798-What-licenses-do-you-offer-for-icons
+- Gemini 画像生成ヘルプ: https://support.google.com/gemini/answer/14286560
+
+### 公開前チェック
+
+- `Content/Sound/` と `Content/Sounds/` の音源について、配布元とクレジット要否をチーム内で再確認する。
+- `Content/Assets/`, `Content/pictures/`, `Content/Title/Asset/`, `Content/Tomato_Asset/` の出典未特定素材は、配布元 URL または自作であることを確認する。
+- Fab / Marketplace アセットは、リポジトリ公開時にアセット単体を取得できる形で再配布してよいかを確認する。必要なら公開リポジトリから第三者 `.uasset` を除外する。
