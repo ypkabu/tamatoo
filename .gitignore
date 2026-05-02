@@ -74,6 +74,15 @@ Plugins/**/Intermediate/*
 # Cache files for the editor to use
 DerivedDataCache/*
 
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local markdown notes
+*.md
+!README.md
+
 # === AI tools / assistants ===
 # Claude Code
 .claude/
