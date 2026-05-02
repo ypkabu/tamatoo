@@ -1,7 +1,8 @@
 # Wipe&Snap
 
-スペインのトマト祭り「La Tomatina」をモチーフにした、2人協力プレイの体験型ゲーム。
-1P がカメラマンとしてトマトを撃ち込み、2P が LeapMotion で「タオル」を動かして汚れを拭き取る。
+スペインのトマト祭り「La Tomatina」をモチーフにした、2人協力プレイの体験型撮影ゲームです。  
+1Pはカメラマンとして自作カメラ型コントローラーを構え、群衆の中からお題の被写体を探して撮影します。  
+2PはLeap Motion Controllerで手を動かし、トマトで汚れたレンズを拭き取って1Pの撮影を支援します。
 
 ## プロジェクト概要
 
@@ -29,8 +30,9 @@
 
 ### ゲームプレイ
 
-- [x] 1P トマト発射（`ATomatinaProjectile`）と着弾位置への汚れ生成
+- [x] 1P 
 - [x] 2P LeapMotion 拭き取り（`UTomatinaTowelSystem`）
+- [x] トマト発射（`ATomatinaProjectile`）と着弾位置への汚れ生成
 - [x] 汚れ管理（`ATomatoDirtManager`）
   - 通常トマト（赤）: 円形範囲の Opacity 漸減
   - 特殊トマト（黄、Sticky）: 連続ダッシュ × 4 回で剥がれる
