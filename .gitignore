@@ -113,3 +113,10 @@ GEMINI.md
 
 # AI 用ドキュメント（このプロジェクト）
 Docs/AI_*.md
+
+# === 個人用 / プロジェクト固有ドキュメント ===
+ES_GAME_OVERVIEW.md
+HARDWARE_CHALLENGES.md
+TODO.md
+TOMATINA_SETUP.md
+ZENN_CYGAMES_ES.md
