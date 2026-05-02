@@ -73,3 +73,43 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# === AI tools / assistants ===
+# Claude Code
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# Codex (OpenAI Codex App / CLI)
+.codex/
+AGENTS.md
+AGENT.md
+
+# GitHub Copilot
+COPILOT_*.md
+.github/copilot-instructions.md
+
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+
+# Gemini CLI
+.gemini/
+GEMINI.md
+
+# Aider
+.aider*
+
+# Continue.dev
+.continue/
+
+# Windsurf
+.windsurf/
+.windsurfrules
+
+# Codeium
+.codeium/
+
+# AI 用ドキュメント（このプロジェクト）
+Docs/AI_*.md
