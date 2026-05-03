@@ -130,12 +130,15 @@
 | Unreal Engine テンプレート / Starter 系素材 | `Content/FirstPerson/`, `Content/LevelPrototyping/`, `Content/Characters/Mannequins/`, `Content/Input/` | Epic Games / Unreal Engine 付属コンテンツ。Unreal Engine EULA / Epic Content License の範囲で使用。 |
 | Fab / Unreal Marketplace / Quixel 系 3D アセット | `Content/Fab/Gorilla/`, `Content/Fab/Megascans/3D/Trash_Bag_Pack_ve2hddjga/`, `Content/MSPresets/`, `Content/Fantastic_Dungeon_Pack/`, `Content/LowPolyMarket/`, `Content/ModularBuildingSet/`, `Content/RPGHeroSquad/`, `Content/Scanned3DPeoplePack/`, `Content/UFO/` | Fab Standard License または取得時の Marketplace ライセンスに従う。Fab Standard License は、プロジェクトへ組み込んだ形での商用/私的利用を許可する一方、アセット単体の再配布・再販売は禁止。 |
 | Fab / Megascans | `Content/mono/gomi/`, `Content/mono/Firehydrant/`, `Content/mono/gomibako/` | `Trash_Bag_Pack_ve2hddjga` 
-| Ultraleap Tracking Plugin | `Plugins/UltraleapTracking_ue5_4-5.0.1/` | Ultraleap Unreal Plugin。GitHub 版は Apache License 2.0。実機利用には Ultraleap Tracking Software / 
+| Ultraleap Tracking Plugin | `Plugins/UltraleapTracking_ue5_4-5.0.1/` | Ultraleap Unreal Plugin。GitHub版は Apache License 2.0。実機利用には Ultraleap Tracking Software が必要。各ライセンス・利用規約に従って使用。 |
 | Freesound 環境音 | `Content/Sound/755969__lastraindrop__evening-food-market-atmosphere-at-street-side.uasset` | Freesound: “Evening food market atmosphere at street side” by `lastraindrop`。Creative Commons 0 (CC0)。 |
-| ニコニ・コモンズ | `Content/Sound/nc146963.uasset` |
+| ニコニ・コモンズ | `Content/Sound/nc146963.uasset` | ニコニ・コモンズ素材。素材ページの利用条件に従って使用。 |
 | Pngtree 画像素材 | `Content/Assets/—Pngtree—white_crumpled_towel_after_use_13244949.uasset`, `Content/Tomato_Asset/pngtree-blood-splatter-drop-png-image_13534558.uasset` | Pngtree License Terms に従う。|
 | イラストくん素材 | `Content/Assets/illustkun-03200-tomato.uasset`, `Content/Assets/illustkun-03200-tomato_Sprite.uasset` | イラストくん利用規約に従う。個人・法人利用、商用利用は規約範囲内で可。素材自体の再配布・販売は禁止。 |
 | The Noun Project アイコン | `Content/Assets/noun-focus-point-4695835.uasset` | The Noun Project 素材。 |
+| SunoAI BGM | `Content/Sound/` 配下のBGMアセット | SunoAIで生成したBGMを使用。生成後、ゲームの雰囲気に合うものを選定し、音量や使用場面を調整して使用。利用規約に従って使用。 |
+| 生成AIによる汚れ画像素材 | レンズ汚れ・トマト汚れ表現に使用している画像アセット | image2で生成した汚れ画像をもとに、ゲーム内のレンズ汚れ表現として使用。必要に応じて見た目や透明度を調整し、ゲーム画面上での視認性を確認。 |
+
 
 ### 参照した主なライセンス情報
 
@@ -154,5 +157,7 @@
 ただし、最終的な仕様判断、プロジェクトへの組み込み、実機での動作確認、パラメータ調整、採用する実装方針の決定は自分で行いました。
 
 特に、スマホファインダー表示、`RenderTarget` 表示、Leap Motion入力、`ProfileGPU` による負荷確認では、AIの提案をそのまま使うのではなく、プロジェクトの要件に合わせて修正・検証しました。
+
+また、BGM素材の一部にSunoAI、レンズ汚れ表現の画像素材作成にimage2を使用しました。生成した素材はそのまま使うのではなく、ゲームの雰囲気や視認性に合うかを確認し、必要に応じて音量・見た目・透明度などを調整しました。
 
 本リポジトリにはAIによるコミットが含まれていますが、提出にあたっては自分の担当範囲とAI利用範囲を明記しています。
