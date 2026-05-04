@@ -50,18 +50,20 @@ void ATomatinaTowelSystem::BeginPlay()
 
 void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPosition, float Speed)
 {
-	bHandDetected      = bDetected;
-	HandScreenPosition = ScreenPosition;
-	HandSpeed          = Speed;
+	bHandDetected         = bDetected;
+	RawHandScreenPosition = ScreenPosition;
+	ClampedHandScreenPosition = ClampNormalizedHandPosition(ScreenPosition);
+	HandScreenPosition = ClampedHandScreenPosition;
+	HandSpeed             = FMath::Max(0.0f, Speed);
 
 	// [DIAG] パッケージ版でも残るように Warning レベル。1秒に1回だけ出力（毎フレームはスパム）
 	static double LastDiagTime = 0.0;
 	const double Now = FPlatformTime::Seconds();
-	if (Now - LastDiagTime > 1.0)
+	if (bDebugLeapInput && Now - LastDiagTime > 1.0)
 	{
 		LastDiagTime = Now;
 		UE_LOG(LogTemp, Warning,
-			TEXT("[TowelDiag] UpdateHandData Detected=%d Pos=(%.3f,%.3f) Speed=%.2f (MinSpeedToWipe=%.1f)"),
+			TEXT("[TowelDiag] UpdateHandData Detected=%d Raw=(%.3f,%.3f) Speed=%.2f (MinSpeedToWipe=%.1f)"),
 			bDetected ? 1 : 0,
 			ScreenPosition.X, ScreenPosition.Y,
 			Speed, MinSpeedToWipe);
@@ -79,11 +81,53 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
 
-	// 手が検出されていない
-	if (!bHandDetected)
+	const float NowSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+	bHasValidInput = false;
+	bUsingGraceInput = false;
+	ProcessedHandSpeed = 0.0f;
+
+	if (bHandDetected)
+	{
+		bHasValidInput = true;
+		SmoothedHandScreenPosition = ApplyHandSmoothing(RawHandScreenPosition, DeltaTime);
+		ClampedHandScreenPosition = ClampNormalizedHandPosition(SmoothedHandScreenPosition);
+		HandScreenPosition = ClampedHandScreenPosition;
+
+		// 速度は Clamp 後の座標差分ではなく BP 由来の生速度を使う。
+		// 画面端で座標が 0/1 に張り付いても、拭き取り/SE の速度判定を不自然に落とさないため。
+		ProcessedHandSpeed = HandSpeed;
+
+		bHasEverValidInput = true;
+		LastValidInputTime = NowSeconds;
+		LastValidHandSpeed = ProcessedHandSpeed;
+		LastValidRawHandScreenPosition = RawHandScreenPosition;
+		LastValidSmoothedHandScreenPosition = SmoothedHandScreenPosition;
+		LastValidClampedHandScreenPosition = ClampedHandScreenPosition;
+	}
+	else if (bHasEverValidInput && InputGraceTime > 0.0f)
+	{
+		const float LostTime = NowSeconds - LastValidInputTime;
+		if (LostTime <= InputGraceTime)
+		{
+			bHasValidInput = true;
+			bUsingGraceInput = true;
+
+			// 短時間ロスト中は最後のスムージング済み座標を保持し、速度だけ線形に落とす。
+			// これにより端で一瞬外れても拭き取り中心は途切れにくく、長く拭き続けることはない。
+			const float GraceAlpha = 1.0f - FMath::Clamp(LostTime / FMath::Max(InputGraceTime, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+			SmoothedHandScreenPosition = LastValidSmoothedHandScreenPosition;
+			ClampedHandScreenPosition = LastValidClampedHandScreenPosition;
+			HandScreenPosition = ClampedHandScreenPosition;
+			ProcessedHandSpeed = LastValidHandSpeed * GraceAlpha;
+		}
+	}
+
+	if (!bHasValidInput)
 	{
 		bTowelVisible    = false;
 		bTowelInZoomView = false;
+		ProcessedHandSpeed = 0.0f;
+		ResetHandInputFilter();
 
 		// 拭き音を止める（手が離れたら即停止）
 		UpdateWipeSound(false);
@@ -98,8 +142,8 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	if (HUD)
 	{
 		const FVector2D ScreenPos(
-			HandScreenPosition.X * HUD->MainWidth,
-			HandScreenPosition.Y * HUD->MainHeight);
+			ClampedHandScreenPosition.X * HUD->MainWidth,
+			ClampedHandScreenPosition.Y * HUD->MainHeight);
 		HUD->UpdateCursorPosition(ScreenPos);
 		HUD->ShowCursor();
 	}
@@ -126,19 +170,19 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	}
 
 	// 拭き取り処理
-	const bool bIsWiping = (HandSpeed >= MinSpeedToWipe);
+	const bool bIsWiping = (ProcessedHandSpeed >= MinSpeedToWipe);
 	UpdateWipeSound(bIsWiping);
 
 	// [DIAG] 拭き状態が変化した瞬間だけログ
 	{
 		static bool bDiagWasWiping = false;
-		if (bIsWiping != bDiagWasWiping)
+		if (bDebugLeapInput && bIsWiping != bDiagWasWiping)
 		{
 			bDiagWasWiping = bIsWiping;
 			UE_LOG(LogTemp, Warning,
-				TEXT("[TowelDiag] WipingState=%s HandSpeed=%.2f Min=%.2f"),
+				TEXT("[TowelDiag] WipingState=%s ProcessedSpeed=%.2f RawSpeed=%.2f Min=%.2f"),
 				bIsWiping ? TEXT("ON") : TEXT("OFF"),
-				HandSpeed, MinSpeedToWipe);
+				ProcessedHandSpeed, HandSpeed, MinSpeedToWipe);
 		}
 	}
 
@@ -146,27 +190,35 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	{
 		CurrentDurability -= DurabilityDrainRate * DeltaTime;
 
-		const float Amount = WipeEfficiency * HandSpeed * SpeedMultiplier * DeltaTime;
+		const float Amount = WipeEfficiency * ProcessedHandSpeed * SpeedMultiplier * DeltaTime;
+		const float AdjustedWipeRadius = CalculateEdgeAdjustedWipeRadius(ClampedHandScreenPosition);
 		if (ATomatoDirtManager* DirtMgr = GetDirtManager())
 		{
-			DirtMgr->WipeDirtAt(HandScreenPosition, WipeRadius, Amount);
+			DirtMgr->WipeDirtAt(ClampedHandScreenPosition, AdjustedWipeRadius, Amount);
 
 			// [DIAG] 1秒に1回だけ拭き量と DirtMgr 取得状態を出す
 			static double LastWipeDiagTime = 0.0;
 			const double Now2 = FPlatformTime::Seconds();
-			if (Now2 - LastWipeDiagTime > 1.0)
+			if (bDebugLeapInput && Now2 - LastWipeDiagTime > 1.0)
 			{
 				LastWipeDiagTime = Now2;
 				UE_LOG(LogTemp, Warning,
-					TEXT("[TowelDiag] Wipe Amount=%.4f Pos=(%.3f,%.3f) Radius=%.3f DirtMgr=OK"),
-					Amount, HandScreenPosition.X, HandScreenPosition.Y, WipeRadius);
+					TEXT("[TowelDiag] Wipe Amount=%.4f Raw=(%.3f,%.3f) Smooth=(%.3f,%.3f) Clamp=(%.3f,%.3f) Valid=%d Grace=%d Speed=%.2f Radius=%.3f DirtMgr=OK"),
+					Amount,
+					RawHandScreenPosition.X, RawHandScreenPosition.Y,
+					SmoothedHandScreenPosition.X, SmoothedHandScreenPosition.Y,
+					ClampedHandScreenPosition.X, ClampedHandScreenPosition.Y,
+					bHasValidInput ? 1 : 0,
+					bUsingGraceInput ? 1 : 0,
+					ProcessedHandSpeed,
+					AdjustedWipeRadius);
 			}
 		}
 		else
 		{
 			static double LastNoMgrLogTime = 0.0;
 			const double Now3 = FPlatformTime::Seconds();
-			if (Now3 - LastNoMgrLogTime > 2.0)
+			if (bDebugLeapInput && Now3 - LastNoMgrLogTime > 2.0)
 			{
 				LastNoMgrLogTime = Now3;
 				UE_LOG(LogTemp, Warning,
@@ -188,7 +240,101 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	}
 
 	// ズーム映像へのタオル映り込み判定
-	bTowelInZoomView = CheckTowelInView(HandScreenPosition);
+	bTowelInZoomView = CheckTowelInView(ClampedHandScreenPosition);
+}
+
+// =============================================================================
+// Leap Motion 入力安定化
+// =============================================================================
+
+FVector2D ATomatinaTowelSystem::ClampNormalizedHandPosition(FVector2D Position) const
+{
+	return FVector2D(
+		FMath::Clamp(Position.X, 0.0f, 1.0f),
+		FMath::Clamp(Position.Y, 0.0f, 1.0f));
+}
+
+FVector2D ATomatinaTowelSystem::ApplyHandSmoothing(FVector2D RawPosition, float DeltaTime)
+{
+	if (!bHasSmoothedHandPosition)
+	{
+		bHasSmoothedHandPosition = true;
+		OneEuroX = FOneEuroAxisState();
+		OneEuroY = FOneEuroAxisState();
+		return RawPosition;
+	}
+
+	switch (SmoothingMode)
+	{
+	case EHandSmoothingMode::EMA:
+	{
+		const float Alpha = FMath::Clamp(EMAAlpha, 0.0f, 1.0f);
+		return FMath::Lerp(SmoothedHandScreenPosition, RawPosition, Alpha);
+	}
+	case EHandSmoothingMode::OneEuro:
+		return FVector2D(
+			ApplyOneEuroAxis(RawPosition.X, DeltaTime, OneEuroX),
+			ApplyOneEuroAxis(RawPosition.Y, DeltaTime, OneEuroY));
+	case EHandSmoothingMode::None:
+	default:
+		return RawPosition;
+	}
+}
+
+float ATomatinaTowelSystem::ApplyOneEuroAxis(float Value, float DeltaTime, FOneEuroAxisState& AxisState) const
+{
+	const float SafeDeltaTime = FMath::Max(DeltaTime, KINDA_SMALL_NUMBER);
+	if (!AxisState.bInitialized)
+	{
+		AxisState.bInitialized = true;
+		AxisState.PreviousRaw = Value;
+		AxisState.PreviousFiltered = Value;
+		AxisState.PreviousDerivative = 0.0f;
+		return Value;
+	}
+
+	const float RawDerivative = (Value - AxisState.PreviousRaw) / SafeDeltaTime;
+	const float DerivativeAlpha = CalculateOneEuroAlpha(OneEuroDCutoff, SafeDeltaTime);
+	const float FilteredDerivative = FMath::Lerp(AxisState.PreviousDerivative, RawDerivative, DerivativeAlpha);
+	const float DynamicCutoff = FMath::Max(0.001f, OneEuroMinCutoff + OneEuroBeta * FMath::Abs(FilteredDerivative));
+	const float PositionAlpha = CalculateOneEuroAlpha(DynamicCutoff, SafeDeltaTime);
+	const float FilteredValue = FMath::Lerp(AxisState.PreviousFiltered, Value, PositionAlpha);
+
+	AxisState.PreviousRaw = Value;
+	AxisState.PreviousFiltered = FilteredValue;
+	AxisState.PreviousDerivative = FilteredDerivative;
+	return FilteredValue;
+}
+
+float ATomatinaTowelSystem::CalculateOneEuroAlpha(float Cutoff, float DeltaTime) const
+{
+	const float SafeCutoff = FMath::Max(Cutoff, 0.001f);
+	const float Tau = 1.0f / (2.0f * PI * SafeCutoff);
+	return 1.0f / (1.0f + Tau / FMath::Max(DeltaTime, KINDA_SMALL_NUMBER));
+}
+
+float ATomatinaTowelSystem::CalculateEdgeAdjustedWipeRadius(FVector2D ClampedPosition) const
+{
+	const float BaseRadius = FMath::Max(0.0f, WipeRadius);
+	if (BaseRadius <= 0.0f || EdgeThreshold <= 0.0f || EdgeRadiusBoost <= 0.0f)
+	{
+		return BaseRadius;
+	}
+
+	const float DistanceToEdge = FMath::Min(
+		FMath::Min(ClampedPosition.X, 1.0f - ClampedPosition.X),
+		FMath::Min(ClampedPosition.Y, 1.0f - ClampedPosition.Y));
+	const float EdgeAlpha = 1.0f - FMath::Clamp(DistanceToEdge / EdgeThreshold, 0.0f, 1.0f);
+	const float BoostedRadius = BaseRadius + EdgeRadiusBoost * EdgeAlpha;
+	const float MaxRadius = BaseRadius * FMath::Max(1.0f, MaxEdgeRadiusMultiplier);
+	return FMath::Clamp(BoostedRadius, BaseRadius, MaxRadius);
+}
+
+void ATomatinaTowelSystem::ResetHandInputFilter()
+{
+	bHasSmoothedHandPosition = false;
+	OneEuroX = FOneEuroAxisState();
+	OneEuroY = FOneEuroAxisState();
 }
 
 // =============================================================================
