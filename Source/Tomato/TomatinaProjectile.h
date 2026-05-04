@@ -50,6 +50,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato")
 	ETomatoTrajectory Trajectory = ETomatoTrajectory::Straight;
 
+	/** 弾の生成・命中・デカール生成の詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tomato|Debug")
+	bool bDebugProjectileLog = false;
+
 	/** 飛行速度（cm/s） */
 	UPROPERTY(EditAnywhere, Category="Tomato")
 	float FlightSpeed = 1500.0f;
@@ -191,4 +195,6 @@ private:
 
 	UPROPERTY()
 	ATomatoDirtManager* CachedDirtManager;
+
+	bool bWarnedMissingDirtManager = false;
 };

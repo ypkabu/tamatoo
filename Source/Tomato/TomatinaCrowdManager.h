@@ -55,6 +55,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Area")
 	FVector AreaExtent = FVector(2000.f, 2000.f, 0.f);
 
+	/** 群衆生成・補充の詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Debug")
+	bool bDebugCrowdLog = false;
+
 	/** スポーン Z オフセット（地面の高さに合わせる） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Crowd|Area")
 	float GroundZOffset = 0.f;

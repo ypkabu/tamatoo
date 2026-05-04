@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
+#include "LeapComponent.h"
 #include "Widgets/SWindow.h"
 
 #include "TomatinaFunctionLibrary.h"
@@ -35,14 +36,22 @@ ATomatinaPlayerPawn::ATomatinaPlayerPawn()
 
 	SceneCapture_Zoom = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("SceneCapture_Zoom"));
 	SceneCapture_Zoom->SetupAttachment(PlayerCamera);
-	SceneCapture_Zoom->bCaptureEveryFrame = true;
+	SceneCapture_Zoom->bCaptureEveryFrame = false;
+	SceneCapture_Zoom->bCaptureOnMovement = false;
 	SceneCapture_Zoom->FOVAngle = 90.f;
+
+	Leap = CreateDefaultSubobject<ULeapComponent>(TEXT("Leap"));
+	Leap->SetAutoActivate(false);
+	Leap->PrimaryComponentTick.bCanEverTick = false;
 }
 
 void ATomatinaPlayerPawn::BeginPlay()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::BeginPlay 開始 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
-		MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::BeginPlay 開始 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d"),
+			MainWidth, MainHeight, PhoneWidth, PhoneHeight, bTestMode ? 1 : 0);
+	}
 
 	Super::BeginPlay();
 
@@ -66,7 +75,10 @@ void ATomatinaPlayerPawn::BeginPlay()
 			if (DefaultMappingContext)
 			{
 				Subsystem->AddMappingContext(DefaultMappingContext, 0);
-				UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: MappingContext 追加完了"));
+				if (bDebugPlayerLog)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: MappingContext 追加完了"));
+				}
 			}
 			else
 			{
@@ -82,35 +94,39 @@ void ATomatinaPlayerPawn::BeginPlay()
 	PC->SetInputMode(InputMode);
 
 	// ── SceneCapture_Zoom 診断ログ ─────────────────────────────────────
-	//   bCaptureEveryFrame が false のままなら RT は更新されない。
-	//   BP で意図せず false になっていないかを可視化する。
+	//   スマホ側 RT はズーム中と短い猶予時間だけ手動更新する。
+	//   BP で意図せず毎フレーム更新に戻っていないかを可視化する。
 	if (SceneCapture_Zoom)
 	{
 		UTextureRenderTarget2D* RT = SceneCapture_Zoom->TextureTarget;
-		UE_LOG(LogTemp, Warning,
-			TEXT("SceneCapture 診断: bCaptureEveryFrame=%d bCaptureOnMovement=%d CaptureSource=%d FOV=%.1f RT=%s RTSize=%dx%d"),
-			SceneCapture_Zoom->bCaptureEveryFrame ? 1 : 0,
-			SceneCapture_Zoom->bCaptureOnMovement ? 1 : 0,
-			static_cast<int32>(SceneCapture_Zoom->CaptureSource),
-			SceneCapture_Zoom->FOVAngle,
-			*GetNameSafe(RT),
-			RT ? RT->SizeX : 0, RT ? RT->SizeY : 0);
-
-		// 安全側：毎フレームキャプチャを強制 ON (BP で false に戻されても起動時に正す)
-		if (!SceneCapture_Zoom->bCaptureEveryFrame)
+		if (bDebugPlayerLog)
 		{
-			SceneCapture_Zoom->bCaptureEveryFrame = true;
-			UE_LOG(LogTemp, Warning, TEXT("SceneCapture_Zoom: bCaptureEveryFrame を強制 ON"));
+			UE_LOG(LogTemp, Warning,
+				TEXT("SceneCapture 診断: bCaptureEveryFrame=%d bCaptureOnMovement=%d CaptureSource=%d FOV=%.1f RT=%s RTSize=%dx%d"),
+				SceneCapture_Zoom->bCaptureEveryFrame ? 1 : 0,
+				SceneCapture_Zoom->bCaptureOnMovement ? 1 : 0,
+				static_cast<int32>(SceneCapture_Zoom->CaptureSource),
+				SceneCapture_Zoom->FOVAngle,
+				*GetNameSafe(RT),
+				RT ? RT->SizeX : 0, RT ? RT->SizeY : 0);
 		}
+
+		SceneCapture_Zoom->bCaptureEveryFrame = false;
+		SceneCapture_Zoom->bCaptureOnMovement = false;
 
 		// CaptureSource が未設定(0 = HDR) のままだと UMG 上で真っ黒になりがち。
 		// Final Color (LDR) in RGB (= 2) を強制。BP で別の値に設定済みなら上書きしない。
 		if (SceneCapture_Zoom->CaptureSource == ESceneCaptureSource::SCS_SceneColorHDR)
 		{
 			SceneCapture_Zoom->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-			UE_LOG(LogTemp, Warning,
-				TEXT("SceneCapture_Zoom: CaptureSource を SCS_FinalColorLDR に自動補正"));
+			if (bDebugPlayerLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("SceneCapture_Zoom: CaptureSource を SCS_FinalColorLDR に自動補正"));
+			}
 		}
+
+		RequestPhoneCaptureBurst(InitialPhoneCaptureSeconds);
 	}
 	else
 	{
@@ -125,7 +141,10 @@ void ATomatinaPlayerPawn::BeginPlay()
 
 void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::SetupPlayerInputComponent"));
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::SetupPlayerInputComponent"));
+	}
 
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
@@ -152,10 +171,13 @@ void ATomatinaPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInput
 	}
 	PlayerInputComponent->BindKey(EKeys::C, IE_Pressed, this, &ATomatinaPlayerPawn::CenterCursorOnMainScreen);
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: Input バインド R=%s L=%s Look=%s Center=C"),
-		IA_RightMouse ? TEXT("OK") : TEXT("NULL"),
-		IA_LeftMouse  ? TEXT("OK") : TEXT("NULL"),
-		IA_Look       ? TEXT("OK") : TEXT("NULL"));
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn: Input バインド R=%s L=%s Look=%s Center=C"),
+			IA_RightMouse ? TEXT("OK") : TEXT("NULL"),
+			IA_LeftMouse  ? TEXT("OK") : TEXT("NULL"),
+			IA_Look       ? TEXT("OK") : TEXT("NULL"));
+	}
 }
 
 void ATomatinaPlayerPawn::Tick(float DeltaTime)
@@ -163,15 +185,6 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	if (!PC || !SceneCapture_Zoom) { return; }
-
-	// 手動 CaptureScene セーフティ。
-	// bCaptureEveryFrame=true が設定されていても UE 5.7 でなぜか自動キャプチャが
-	// 走らないケースが観測されているため、Tick で毎フレーム明示的に呼ぶ。
-	// 二重呼び出しになってもパフォ影響は軽微。
-	if (SceneCapture_Zoom->TextureTarget)
-	{
-		SceneCapture_Zoom->CaptureScene();
-	}
 
 	if (!bTestMode && !bWindowLayoutVerified)
 	{
@@ -208,8 +221,11 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 			const FVector2D Center =
 				UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
 			PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
-				Center.X, Center.Y);
+			if (bDebugPlayerLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
+					Center.X, Center.Y);
+			}
 		}
 	}
 
@@ -219,7 +235,10 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 		bZoomComplete = true;
 		PC->bShowMouseCursor = true;
 		PC->SetInputMode(FInputModeGameOnly());
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効・カーソル表示継続）"));
+		if (bDebugPlayerLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効・カーソル表示継続）"));
+		}
 	}
 
 	// ── ズーム中：マウスルックを SceneCapture_Zoom のローカル回転に適用 ──
@@ -278,6 +297,8 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 			}
 		}
 	}
+
+	UpdatePhoneSceneCapture(RealDelta);
 }
 
 // =============================================================================
@@ -285,7 +306,10 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 // =============================================================================
 void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed"));
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMousePressed"));
+	}
 
 	if (!PC || !PlayerCamera || !GetWorld()) { return; }
 
@@ -317,9 +341,12 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 		const float SkyDist = FMath::Max(100.f, SkyFallbackDistance);
 		Hit.ImpactPoint  = WorldLoc + WorldDir * SkyDist;
 		Hit.ImpactNormal = -WorldDir;
-		UE_LOG(LogTemp, Warning,
-			TEXT("OnRightMousePressed: ヒットなし → 仮想空ヒット距離 %.0f cm で続行"),
-			SkyDist);
+		if (bDebugPlayerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("OnRightMousePressed: ヒットなし → 仮想空ヒット距離 %.0f cm で続行"),
+				SkyDist);
+		}
 	}
 
 	TargetOffset = UTomatinaFunctionLibrary::CalculateZoomOffset(
@@ -354,9 +381,12 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 			{
 				const float Scale = FMath::Clamp(SafeDist / FullDist, 0.f, 1.f);
 				TargetOffset *= Scale;
-				UE_LOG(LogTemp, Warning,
-					TEXT("OnRightMousePressed: 壁検出 FullDist=%.1f HitDist=%.1f SafeDist=%.1f -> Scale=%.2f"),
-					FullDist, HitDist, SafeDist, Scale);
+				if (bDebugPlayerLog)
+				{
+					UE_LOG(LogTemp, Warning,
+						TEXT("OnRightMousePressed: 壁検出 FullDist=%.1f HitDist=%.1f SafeDist=%.1f -> Scale=%.2f"),
+						FullDist, HitDist, SafeDist, Scale);
+				}
 			}
 			else
 			{
@@ -373,6 +403,8 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 		SceneCapture_Zoom->bOverride_CustomNearClippingPlane = true;
 	}
 
+	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
+
 	bIsZooming      = true;
 	bZoomComplete   = false;
 	bCursorCentered = false;
@@ -385,8 +417,11 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 	// ズーム開始 SE
 	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, ZoomInSound);
 
-	UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ズーム開始 Offset=(%.1f,%.1f,%.1f)"),
-		TargetOffset.X, TargetOffset.Y, TargetOffset.Z);
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ズーム開始 Offset=(%.1f,%.1f,%.1f)"),
+			TargetOffset.X, TargetOffset.Y, TargetOffset.Z);
+	}
 }
 
 // =============================================================================
@@ -394,7 +429,10 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 // =============================================================================
 void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& /*Value*/)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMouseReleased"));
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnRightMouseReleased"));
+	}
 
 	// ズーム解除 SE（ズーム中のみ鳴らす。未ズーム時のキャンセル連打で鳴らないように）
 	if (bIsZooming)
@@ -405,6 +443,7 @@ void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& /*Value*
 	bIsZooming      = false;
 	bZoomComplete   = false;
 	bCursorCentered = false;
+	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
 
 	if (PC)
 	{
@@ -425,11 +464,16 @@ void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& /*Value*
 // =============================================================================
 void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed bIsZooming=%d"),
-		bIsZooming ? 1 : 0);
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::OnLeftMousePressed bIsZooming=%d"),
+			bIsZooming ? 1 : 0);
+	}
 
 	if (!bIsZooming) { return; }
 	if (!GetWorld())  { return; }
+
+	CapturePhoneSceneNow();
 
 	if (ATomatinaGameMode* GameMode = Cast<ATomatinaGameMode>(
 			UGameplayStatics::GetGameMode(GetWorld())))
@@ -445,6 +489,7 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 	bIsZooming      = false;
 	bZoomComplete   = false;
 	bCursorCentered = false;
+	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
 
 	if (PC)
 	{
@@ -479,9 +524,47 @@ void ATomatinaPlayerPawn::CenterCursorOnMainScreen()
 	const int32 CenterY = FMath::RoundToInt(MainHeight * 0.5f);
 	PC->SetMouseLocation(CenterX, CenterY);
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaPlayerPawn::CenterCursorOnMainScreen: カーソルをメイン中央(%d,%d)へ移動"),
-		CenterX, CenterY);
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaPlayerPawn::CenterCursorOnMainScreen: カーソルをメイン中央(%d,%d)へ移動"),
+			CenterX, CenterY);
+	}
+}
+
+void ATomatinaPlayerPawn::RequestPhoneCaptureBurst(float Duration)
+{
+	PhoneCaptureBurstRemaining = FMath::Max(PhoneCaptureBurstRemaining, FMath::Max(0.f, Duration));
+}
+
+void ATomatinaPlayerPawn::UpdatePhoneSceneCapture(float DeltaTime)
+{
+	if (!SceneCapture_Zoom)
+	{
+		return;
+	}
+
+	SceneCapture_Zoom->bCaptureEveryFrame = false;
+	SceneCapture_Zoom->bCaptureOnMovement = false;
+
+	const bool bHasCaptureBurst = (PhoneCaptureBurstRemaining > 0.f);
+	if (bHasCaptureBurst)
+	{
+		PhoneCaptureBurstRemaining = FMath::Max(0.f, PhoneCaptureBurstRemaining - DeltaTime);
+	}
+
+	if (bIsZooming || bHasCaptureBurst)
+	{
+		CapturePhoneSceneNow();
+	}
+}
+
+void ATomatinaPlayerPawn::CapturePhoneSceneNow()
+{
+	if (SceneCapture_Zoom && SceneCapture_Zoom->TextureTarget)
+	{
+		SceneCapture_Zoom->CaptureScene();
+	}
 }
 
 void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
@@ -506,9 +589,12 @@ void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
 	{
 		if (!bWindowLayoutVerified)
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaPlayerPawn: ウィンドウサイズ確認 OK Viewport=(%dx%d) Required=(%dx%d)"),
-				ViewW, ViewH, DesiredW, DesiredH);
+			if (bDebugPlayerLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaPlayerPawn: ウィンドウサイズ確認 OK Viewport=(%dx%d) Required=(%dx%d)"),
+					ViewW, ViewH, DesiredW, DesiredH);
+			}
 		}
 		bWindowLayoutVerified = true;
 		return;
@@ -538,7 +624,10 @@ void ATomatinaPlayerPawn::EnsureDualScreenWindowLayout()
 	}
 
 	WindowLayoutRetryCount++;
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaPlayerPawn: ウィンドウサイズ不足 Viewport=(%dx%d) Required=(%dx%d) -> r.SetRes 適用試行 %d/6"),
-		ViewW, ViewH, DesiredW, DesiredH, WindowLayoutRetryCount);
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaPlayerPawn: ウィンドウサイズ不足 Viewport=(%dx%d) Required=(%dx%d) -> r.SetRes 適用試行 %d/6"),
+			ViewW, ViewH, DesiredW, DesiredH, WindowLayoutRetryCount);
+	}
 }

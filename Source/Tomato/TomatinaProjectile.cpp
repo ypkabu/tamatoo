@@ -60,9 +60,12 @@ void ATomatinaProjectile::Initialize(FVector Target, ETomatoTrajectory InTraject
 	FlightDuration = (FlightSpeed > 0.f) ? Dist / FlightSpeed : 1.f;
 	FlightProgress = 0.f;
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaProjectile::Initialize: Traj=%d Dist=%.0f Duration=%.2f"),
-		static_cast<int32>(Trajectory), Dist, FlightDuration);
+	if (bDebugProjectileLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaProjectile::Initialize: Traj=%d Dist=%.0f Duration=%.2f"),
+			static_cast<int32>(Trajectory), Dist, FlightDuration);
+	}
 }
 
 // =============================================================================
@@ -79,7 +82,10 @@ void ATomatinaProjectile::Tick(float DeltaTime)
 	ElapsedTime += DeltaTime;
 	if (ElapsedTime >= MaxLifetime)
 	{
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaProjectile: 寿命切れで破棄（プレイヤー未命中）"));
+		if (bDebugProjectileLog)
+		{
+			UE_LOG(LogTemp, Log, TEXT("ATomatinaProjectile: 寿命切れで破棄（プレイヤー未命中）"));
+		}
 		Destroy();
 		return;
 	}
@@ -210,9 +216,12 @@ void ATomatinaProjectile::OnHitCamera()
 		}
 	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaProjectile::OnHitCamera: variant=%d pos=(%.2f,%.2f) size=%.3f"),
-		static_cast<int32>(ImpactVariant), SplatPos.X, SplatPos.Y, SplatSize);
+	if (bDebugProjectileLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaProjectile::OnHitCamera: variant=%d pos=(%.2f,%.2f) size=%.3f"),
+			static_cast<int32>(ImpactVariant), SplatPos.X, SplatPos.Y, SplatSize);
+	}
 
 	// 着弾 SE（カメラ命中は 2D で一定音量のほうが気持ちいいので PlaySound2D）
 	USoundBase* HitSound = nullptr;
@@ -247,7 +256,10 @@ void ATomatinaProjectile::OnHitWorld(UPrimitiveComponent* HitComp, const FHitRes
 
 	if (!WorldDecalMaterial)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaProjectile::OnHitWorld: WorldDecalMaterial 未設定"));
+		if (bDebugProjectileLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaProjectile::OnHitWorld: WorldDecalMaterial 未設定"));
+		}
 		return;
 	}
 
@@ -268,9 +280,12 @@ void ATomatinaProjectile::OnHitWorld(UPrimitiveComponent* HitComp, const FHitRes
 		EAttachLocation::KeepWorldPosition,
 		Lifetime);
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaProjectile::OnHitWorld: デカール生成 size=%.1f at=(%.0f,%.0f,%.0f) Lifetime=%.1f Decal=%s"),
-		Size, Loc.X, Loc.Y, Loc.Z, Lifetime, Decal ? *Decal->GetName() : TEXT("null"));
+	if (bDebugProjectileLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaProjectile::OnHitWorld: デカール生成 size=%.1f at=(%.0f,%.0f,%.0f) Lifetime=%.1f Decal=%s"),
+			Size, Loc.X, Loc.Y, Loc.Z, Lifetime, Decal ? *Decal->GetName() : TEXT("null"));
+	}
 }
 
 // =============================================================================
@@ -284,8 +299,9 @@ ATomatoDirtManager* ATomatinaProjectile::GetDirtManager()
 		AActor* Found = UGameplayStatics::GetActorOfClass(GetWorld(), ATomatoDirtManager::StaticClass());
 		CachedDirtManager = Cast<ATomatoDirtManager>(Found);
 
-		if (!CachedDirtManager)
+		if (!CachedDirtManager && bDebugProjectileLog && !bWarnedMissingDirtManager)
 		{
+			bWarnedMissingDirtManager = true;
 			UE_LOG(LogTemp, Warning,
 				TEXT("ATomatinaProjectile::GetDirtManager: ATomatoDirtManager がレベル上に見つかりません"));
 		}

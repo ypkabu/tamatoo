@@ -65,6 +65,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Area")
 	FVector PlayAreaExtent = FVector(1500.f, 1500.f, 100.f);
 
+	/** 投げ手スポナーの詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Debug")
+	bool bDebugSpawnerLog = false;
+
 	/** 出現位置を Extent からどれだけ外側に置くか（cm） */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Area")
 	float SpawnOutsideMargin = 200.f;

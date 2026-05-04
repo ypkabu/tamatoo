@@ -15,6 +15,8 @@
 
 #include "TomatinaTargetBase.h"
 
+bool UTomatinaFunctionLibrary::bUtilityDebugLogEnabled = false;
+
 // -----------------------------------------------------------------------------
 // CheckVisibility
 // NDC 判定 + ライントレース（仕様通りの実装）
@@ -26,7 +28,10 @@ bool UTomatinaFunctionLibrary::CheckVisibility(
 	float ScreenWidth,
 	float ScreenHeight)
 {
-	UE_LOG(LogTemp, Warning, TEXT("CheckVisibility 開始"));
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CheckVisibility 開始"));
+	}
 
 	if (!ZoomCamera || !Target) { return false; }
 	UWorld* World = ZoomCamera->GetWorld();
@@ -101,8 +106,11 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	float ScreenWidth,
 	float ScreenHeight)
 {
-	UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 開始 Mission=%s Targets=%d"),
-		*CurrentMission.ToString(), Targets.Num());
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 開始 Mission=%s Targets=%d"),
+			*CurrentMission.ToString(), Targets.Num());
+	}
 
 	FPhotoResult Result;
 	Result.Score      = 0;
@@ -164,8 +172,11 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 			ThisScore = FMath::Max(0, ThisScore);
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT(" Target=%s Head=%d Root=%d Score=%d"),
-			*Target->GetName(), bHeadVisible ? 1 : 0, bRootVisible ? 1 : 0, ThisScore);
+		if (bUtilityDebugLogEnabled)
+		{
+			UE_LOG(LogTemp, Warning, TEXT(" Target=%s Head=%d Root=%d Score=%d"),
+				*Target->GetName(), bHeadVisible ? 1 : 0, bRootVisible ? 1 : 0, ThisScore);
+		}
 
 		if (ThisScore > BestScore)
 		{
@@ -182,8 +193,11 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	if (BestActor && BestActor->bEnablePose && BestActor->bIsPosing && BestScore > 0)
 	{
 		const int32 BoostedScore = FMath::RoundToInt(BestScore * BestActor->PoseScoreMultiplier);
-		UE_LOG(LogTemp, Warning, TEXT(" ポーズボーナス適用: %d → %d (x%.2f)"),
-			BestScore, BoostedScore, BestActor->PoseScoreMultiplier);
+		if (bUtilityDebugLogEnabled)
+		{
+			UE_LOG(LogTemp, Warning, TEXT(" ポーズボーナス適用: %d → %d (x%.2f)"),
+				BestScore, BoostedScore, BestActor->PoseScoreMultiplier);
+		}
 		BestScore = BoostedScore;
 		BestComment = FString::Printf(TEXT("%s ポーズボーナス！"), *BestComment);
 	}
@@ -192,9 +206,12 @@ FPhotoResult UTomatinaFunctionLibrary::CalculatePhotoScore(
 	Result.Comment    = BestComment;
 	Result.BestTarget = (BestScore > 0) ? BestActor : nullptr;
 
-	UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 結果: Score=%d BestTarget=%s"),
-		Result.Score,
-		Result.BestTarget ? *Result.BestTarget->GetName() : TEXT("none"));
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CalculatePhotoScore 結果: Score=%d BestTarget=%s"),
+			Result.Score,
+			Result.BestTarget ? *Result.BestTarget->GetName() : TEXT("none"));
+	}
 
 	return Result;
 }
@@ -209,7 +226,10 @@ FVector UTomatinaFunctionLibrary::CalculateZoomOffset(
 	UCameraComponent* Camera,
 	float CameraFOV)
 {
-	UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset 開始"));
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CalculateZoomOffset 開始"));
+	}
 
 	if (!PC || !Camera)
 	{
@@ -250,7 +270,10 @@ FVector2D UTomatinaFunctionLibrary::GetZoomScreenCenter(
 	float PhoneWidth,
 	float PhoneHeight)
 {
-	UE_LOG(LogTemp, Warning, TEXT("GetZoomScreenCenter 呼び出し"));
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GetZoomScreenCenter 呼び出し"));
+	}
 	return FVector2D(MainWidth + PhoneWidth * 0.5f, PhoneHeight * 0.5f);
 }
 
@@ -290,7 +313,10 @@ void UTomatinaFunctionLibrary::CopyZoomToPhoto(
 	USceneCaptureComponent2D* ZoomCamera,
 	UTextureRenderTarget2D* PhotoTarget)
 {
-	UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto 開始"));
+	if (bUtilityDebugLogEnabled)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CopyZoomToPhoto 開始"));
+	}
 
 	if (!ZoomCamera || !PhotoTarget)
 	{
@@ -302,6 +328,11 @@ void UTomatinaFunctionLibrary::CopyZoomToPhoto(
 	ZoomCamera->TextureTarget = PhotoTarget;
 	ZoomCamera->CaptureScene();
 	ZoomCamera->TextureTarget = Original;
+}
+
+void UTomatinaFunctionLibrary::SetUtilityDebugLogEnabled(bool bEnabled)
+{
+	bUtilityDebugLogEnabled = bEnabled;
 }
 
 // -----------------------------------------------------------------------------

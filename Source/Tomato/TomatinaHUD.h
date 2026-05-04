@@ -71,6 +71,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Widgets")
 	TSubclassOf<UUserWidget> TestPipWidgetClass;
 
+	/** HUDの詳細ログ。通常はOFF。Widget生成や表示切替の調査時だけONにする。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD|Debug")
+	bool bDebugHUDLog = false;
+
 	/** 第二ウィンドウ (スマホ側) に出す UserWidget。
 	 *  想定階層:
 	 *    Root: CanvasPanel (Fill)

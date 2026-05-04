@@ -68,7 +68,10 @@ void ATomatoDirtManager::SpawnDirt()
 	// MaxDirts に達していれば生成しない
 	if (DirtSplats.Num() >= MaxDirts)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::SpawnDirt: MaxDirts (%d) に達しているためスキップ"), MaxDirts);
+		if (bDebugDirtLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::SpawnDirt: MaxDirts (%d) に達しているためスキップ"), MaxDirts);
+		}
 		return;
 	}
 
@@ -89,9 +92,12 @@ void ATomatoDirtManager::SpawnDirt()
 
 	DirtSplats.Add(NewDirt);
 
-	UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::SpawnDirt: 汚れ生成 pos=(%.2f, %.2f) size=%.3f tex=%d 合計=%d"),
-		NewDirt.NormalizedPosition.X, NewDirt.NormalizedPosition.Y,
-		NewDirt.Size, NewDirt.TextureIndex, DirtSplats.Num());
+	if (bDebugDirtLog)
+	{
+		UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::SpawnDirt: 汚れ生成 pos=(%.2f, %.2f) size=%.3f tex=%d 合計=%d"),
+			NewDirt.NormalizedPosition.X, NewDirt.NormalizedPosition.Y,
+			NewDirt.Size, NewDirt.TextureIndex, DirtSplats.Num());
+	}
 
 	NotifyHUD();
 }
@@ -108,9 +114,12 @@ void ATomatoDirtManager::AddDirtWithType(FVector2D NormPos, float Size, EDirtTyp
 	// MaxDirts に達していたら追加しない（既存の汚れは消さない）
 	if (DirtSplats.Num() >= MaxDirts)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatoDirtManager::AddDirtWithType: MaxDirts(%d) に達しているため追加スキップ"),
-			MaxDirts);
+		if (bDebugDirtLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatoDirtManager::AddDirtWithType: MaxDirts(%d) に達しているため追加スキップ"),
+				MaxDirts);
+		}
 		return;
 	}
 
@@ -118,9 +127,12 @@ void ATomatoDirtManager::AddDirtWithType(FVector2D NormPos, float Size, EDirtTyp
 	float SafeSize = Size;
 	if (MaxDirtSize > 0.f && SafeSize > MaxDirtSize)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatoDirtManager::AddDirt: Size=%.3f が MaxDirtSize=%.3f を超過 → クランプ"),
-			SafeSize, MaxDirtSize);
+		if (bDebugDirtLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatoDirtManager::AddDirt: Size=%.3f が MaxDirtSize=%.3f を超過 → クランプ"),
+				SafeSize, MaxDirtSize);
+		}
 		SafeSize = MaxDirtSize;
 	}
 	SafeSize = FMath::Max(SafeSize, 0.01f);
@@ -166,10 +178,13 @@ void ATomatoDirtManager::AddDirtWithType(FVector2D NormPos, float Size, EDirtTyp
 
 	DirtSplats.Add(NewDirt);
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatoDirtManager::AddDirtWithType: type=%d pos=(%.2f,%.2f) size=%.3f tex=%d reqDash=%d 合計=%d"),
-		static_cast<int32>(InDirtType), NormPos.X, NormPos.Y, SafeSize,
-		NewDirt.TextureIndex, NewDirt.RequiredDashCount, DirtSplats.Num());
+	if (bDebugDirtLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatoDirtManager::AddDirtWithType: type=%d pos=(%.2f,%.2f) size=%.3f tex=%d reqDash=%d 合計=%d"),
+			static_cast<int32>(InDirtType), NormPos.X, NormPos.Y, SafeSize,
+			NewDirt.TextureIndex, NewDirt.RequiredDashCount, DirtSplats.Num());
+	}
 
 	NotifyHUD();
 }
@@ -196,7 +211,10 @@ void ATomatoDirtManager::ClearDirtAt(FVector2D NormPos, float Radius)
 	if (ClearedCount > 0)
 	{
 		DirtSplats.RemoveAll([](const FDirtSplat& D) { return !D.bActive; });
-		UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::ClearDirtAt: %d 個の汚れを消去"), ClearedCount);
+		if (bDebugDirtLog)
+		{
+			UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::ClearDirtAt: %d 個の汚れを消去"), ClearedCount);
+		}
 		NotifyHUD();
 	}
 }
@@ -213,7 +231,10 @@ void ATomatoDirtManager::ClearAllDirts()
 {
 	const int32 PrevCount = DirtSplats.Num();
 	DirtSplats.Empty();
-	UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::ClearAllDirts: %d 個の汚れを全削除"), PrevCount);
+	if (bDebugDirtLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatoDirtManager::ClearAllDirts: %d 個の汚れを全削除"), PrevCount);
+	}
 	NotifyHUD();
 }
 
@@ -327,7 +348,10 @@ void ATomatoDirtManager::NotifyHUD()
 		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
 		{
 			HUD->UpdateDirtDisplay(DirtSplats);
-			UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::NotifyHUD: HUD に通知（汚れ数=%d）"), DirtSplats.Num());
+			if (bDebugDirtLog)
+			{
+				UE_LOG(LogTemp, Log, TEXT("ATomatoDirtManager::NotifyHUD: HUD に通知（汚れ数=%d）"), DirtSplats.Num());
+			}
 		}
 	}
 }

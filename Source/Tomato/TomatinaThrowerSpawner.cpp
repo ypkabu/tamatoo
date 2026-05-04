@@ -31,16 +31,22 @@ void ATomatinaThrowerSpawner::BeginPlay()
 		// 窓 20 秒に MaxThrowers 体を均等配置
 		const float Window = FMath::Max(1.f, FrontLoadWindowSeconds);
 		CurrentInterval    = Window / static_cast<float>(MaxThrowers);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrowerSpawner: BeginPlay [FrontLoad] Window=%.1fs Interval=%.2fs Max=%d"),
-			Window, CurrentInterval, MaxThrowers);
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaThrowerSpawner: BeginPlay [FrontLoad] Window=%.1fs Interval=%.2fs Max=%d"),
+				Window, CurrentInterval, MaxThrowers);
+		}
 	}
 	else
 	{
 		CurrentInterval = StartingInterval;
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrowerSpawner: BeginPlay InitialDelay=%.1f Start=%.1f Min=%.1f Max=%d"),
-			InitialDelay, StartingInterval, MinInterval, MaxThrowers);
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaThrowerSpawner: BeginPlay InitialDelay=%.1f Start=%.1f Min=%.1f Max=%d"),
+				InitialDelay, StartingInterval, MinInterval, MaxThrowers);
+		}
 	}
 }
 
@@ -98,8 +104,11 @@ ATomatinaThrower* ATomatinaThrowerSpawner::SpawnThrowerNow()
 	TSubclassOf<ATomatinaThrower> Cls = PickThrowerClass();
 	if (!Cls)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaThrowerSpawner: ThrowerVariants が空 or クラス未設定"));
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaThrowerSpawner: ThrowerVariants が空 or クラス未設定"));
+		}
 		return nullptr;
 	}
 
@@ -118,7 +127,10 @@ ATomatinaThrower* ATomatinaThrowerSpawner::SpawnThrowerNow()
 
 	if (!Thrower)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrowerSpawner: SpawnActor 失敗"));
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrowerSpawner: SpawnActor 失敗"));
+		}
 		return nullptr;
 	}
 
@@ -139,10 +151,13 @@ ATomatinaThrower* ATomatinaThrowerSpawner::SpawnThrowerNow()
 	LiveThrowers.Add(Thrower);
 	SpawnedCount++;
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaThrowerSpawner: スポーン #%d Edge=%d From=(%.0f,%.0f) → Dest=(%.0f,%.0f)"),
-		SpawnedCount, static_cast<int32>(Edge),
-		SpawnLoc.X, SpawnLoc.Y, DestLoc.X, DestLoc.Y);
+	if (bDebugSpawnerLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaThrowerSpawner: スポーン #%d Edge=%d From=(%.0f,%.0f) → Dest=(%.0f,%.0f)"),
+			SpawnedCount, static_cast<int32>(Edge),
+			SpawnLoc.X, SpawnLoc.Y, DestLoc.X, DestLoc.Y);
+	}
 
 	return Thrower;
 }

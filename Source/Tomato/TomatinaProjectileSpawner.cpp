@@ -45,9 +45,12 @@ void ATomatinaProjectileSpawner::SpawnTomato()
 {
 	if (SpawnPoints.Num() == 0 || !ProjectileClass)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaProjectileSpawner::SpawnTomato: "
-			     "SpawnPoints が空 または ProjectileClass 未設定"));
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaProjectileSpawner::SpawnTomato: "
+				     "SpawnPoints が空 または ProjectileClass 未設定"));
+		}
 		return;
 	}
 
@@ -60,8 +63,11 @@ void ATomatinaProjectileSpawner::SpawnTomato()
 	APawn*             Pawn = PC ? PC->GetPawn() : nullptr;
 	if (!Pawn)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaProjectileSpawner::SpawnTomato: Pawn の取得に失敗"));
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaProjectileSpawner::SpawnTomato: Pawn の取得に失敗"));
+		}
 		return;
 	}
 	const FVector CameraLoc = Pawn->GetActorLocation();
@@ -88,8 +94,11 @@ void ATomatinaProjectileSpawner::SpawnTomato()
 
 	if (!Tomato)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaProjectileSpawner::SpawnTomato: SpawnActor に失敗"));
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaProjectileSpawner::SpawnTomato: SpawnActor に失敗"));
+		}
 		return;
 	}
 
@@ -101,9 +110,12 @@ void ATomatinaProjectileSpawner::SpawnTomato()
 		Tomato->CurveDirection = (FMath::FRand() > 0.5f) ? 1.0f : -1.0f;
 	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaProjectileSpawner::SpawnTomato: "
-		     "スポーン完了 Traj=%d Loc=(%.0f,%.0f,%.0f)"),
-		static_cast<int32>(Traj),
-		SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z);
+	if (bDebugSpawnerLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaProjectileSpawner::SpawnTomato: "
+			     "スポーン完了 Traj=%d Loc=(%.0f,%.0f,%.0f)"),
+			static_cast<int32>(Traj),
+			SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z);
+	}
 }

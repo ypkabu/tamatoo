@@ -101,8 +101,11 @@ void ATomatinaTargetBase::BeginPlay()
 		MeshComp->SetCustomDepthStencilValue(OutlineStencilValue);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: BeginPlay Pattern=%d Delay=%.1f"),
-		*GetName(), static_cast<int32>(MovementType), StartDelay);
+	if (bDebugTargetLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: BeginPlay Pattern=%d Delay=%.1f"),
+			*GetName(), static_cast<int32>(MovementType), StartDelay);
+	}
 }
 
 // =============================================================================
@@ -121,7 +124,10 @@ void ATomatinaTargetBase::Tick(float DeltaTime)
 		{
 			bActive = true;
 			if (MeshComp) { MeshComp->SetVisibility(true); }
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: Delay 終了・アクティブ化"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: Delay 終了・アクティブ化"), *GetName());
+			}
 
 			// 出現 SE（ターゲット位置から 3D 再生）
 			UTomatinaFunctionLibrary::PlayTomatinaCueAtLocation(
@@ -190,7 +196,10 @@ bool ATomatinaTargetBase::TickPose(float DeltaTime)
 			bIsPosing      = false;
 			PoseCheckTimer = 0.f;
 			OnPoseEnded();
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ終了"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ終了"), *GetName());
+			}
 		}
 		return true; // ポーズ中は movement を凍結
 	}
@@ -205,8 +214,11 @@ bool ATomatinaTargetBase::TickPose(float DeltaTime)
 			bIsPosing = true;
 			PoseTimer = PoseDuration;
 			OnPoseStarted();
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ開始 (%.2f 秒・倍率 x%.2f)"),
-				*GetName(), PoseDuration, PoseScoreMultiplier);
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: ポーズ開始 (%.2f 秒・倍率 x%.2f)"),
+					*GetName(), PoseDuration, PoseScoreMultiplier);
+			}
 			return true;
 		}
 	}
@@ -236,8 +248,11 @@ void ATomatinaTargetBase::TickDepthHideAndSeek(float DeltaTime)
 			? ShowDuration + FMath::RandRange(-0.5f, 0.5f)
 			: HideDuration + FMath::RandRange(-1.0f, 1.0f);
 
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: DepthHideAndSeek → %s (%.2f 秒)"),
-			*GetName(), bIsShowing ? TEXT("表示") : TEXT("隠れ"), StateTimer);
+		if (bDebugTargetLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: DepthHideAndSeek → %s (%.2f 秒)"),
+				*GetName(), bIsShowing ? TEXT("表示") : TEXT("隠れ"), StateTimer);
+		}
 	}
 }
 
@@ -257,11 +272,17 @@ void ATomatinaTargetBase::TickRunAcross(float DeltaTime)
 		if (bLoop)
 		{
 			RunProgress = 0.f;
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: RunAcross ループ"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: RunAcross ループ"), *GetName());
+			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: RunAcross 終了 → Destroy"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: RunAcross 終了 → Destroy"), *GetName());
+			}
 			Destroy();
 			return;
 		}
@@ -309,13 +330,19 @@ void ATomatinaTargetBase::TickFlyArc(float DeltaTime)
 			{
 				bIsHovering = true;
 				HoverTimer  = HoverDuration;
-				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FlyArc ホバリング開始 (%.2f 秒)"),
-					*GetName(), HoverDuration);
+				if (bDebugTargetLog)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FlyArc ホバリング開始 (%.2f 秒)"),
+						*GetName(), HoverDuration);
+				}
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FlyArc 終了 → Destroy"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FlyArc 終了 → Destroy"), *GetName());
+			}
 			Destroy();
 			return;
 		}
@@ -361,7 +388,10 @@ void ATomatinaTargetBase::TickFloatErratic(float DeltaTime)
 		{
 			FloatTarget = OriginLocation + FMath::VRand() * FloatRadius;
 			SetActorLocation(FloatTarget);
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FloatErratic ワープ"), *GetName());
+			if (bDebugTargetLog)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: FloatErratic ワープ"), *GetName());
+			}
 		}
 	}
 }
@@ -393,7 +423,10 @@ void ATomatinaTargetBase::TickBlendWithCrowd(float DeltaTime)
 	{
 		// 反対端（RunStartOffset 側）へ瞬間移動
 		SetActorLocation(OriginLocation + RunStartOffset);
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: BlendWithCrowd ループ"), *GetName());
+		if (bDebugTargetLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaTargetBase [%s]: BlendWithCrowd ループ"), *GetName());
+		}
 	}
 }
 

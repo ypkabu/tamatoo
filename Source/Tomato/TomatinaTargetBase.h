@@ -46,6 +46,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target")
 	FName MyType = FName("None");
 
+	/** ターゲット出現・移動ループ・ポーズの詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Target|Debug")
+	bool bDebugTargetLog = false;
+
 	/** シーンルート。MeshComp はこの配下にぶら下がるので BP で Location/Rotation/Scale を自由に変更できる */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Target")
 	USceneComponent* SceneRoot;

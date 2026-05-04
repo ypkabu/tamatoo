@@ -76,6 +76,9 @@ public:
 		USceneCaptureComponent2D* ZoomCamera,
 		UTextureRenderTarget2D* PhotoTarget);
 
+	UFUNCTION(BlueprintCallable, Category="Tomatina|Debug")
+	static void SetUtilityDebugLogEnabled(bool bEnabled);
+
 	/** FTomatinaSoundCue を 2D 再生（遅延・音量・ピッチ対応） */
 	UFUNCTION(BlueprintCallable, Category="Tomatina|Audio", meta=(WorldContext="WorldContextObject"))
 	static void PlayTomatinaCue2D(
@@ -88,4 +91,7 @@ public:
 		const UObject* WorldContextObject,
 		const FTomatinaSoundCue& Cue,
 		FVector Location);
+
+private:
+	static bool bUtilityDebugLogEnabled;
 };

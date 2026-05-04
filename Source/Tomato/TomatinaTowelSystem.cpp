@@ -4,6 +4,8 @@
 
 #include "Components/AudioComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "IUltraleapTrackingPlugin.h"
+#include "LeapComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
@@ -23,6 +25,7 @@ ATomatinaTowelSystem::ATomatinaTowelSystem()
 	, CachedPlayerPawn(nullptr)
 {
 	PrimaryActorTick.bCanEverTick = true;
+	LeapComponent = CreateDefaultSubobject<ULeapComponent>(TEXT("LeapComponent"));
 }
 
 // =============================================================================
@@ -35,13 +38,15 @@ void ATomatinaTowelSystem::BeginPlay()
 
 	CurrentDurability = MaxDurability;
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaTowelSystem::BeginPlay: 初期化完了 Durability=%.1f MinSpeedToWipe=%.2f WipeRadius=%.3f"),
-		CurrentDurability, MinSpeedToWipe, WipeRadius);
+	SetLeapInputStatus(bReadLeapInputInCpp ? TEXT("Waiting for Leap frame") : TEXT("C++ Leap input disabled"));
 
-	// [DIAG] パッケージ確認用：自分が生きていることのマーカー
-	UE_LOG(LogTemp, Warning,
-		TEXT("[TowelDiag] ATomatinaTowelSystem started — もし以後 [TowelDiag] UpdateHandData が出なければ BP 側が UpdateHandData を呼んでいない"));
+	if (bDebugLeapInput)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[TowelDiag] BeginPlay LeapCppInput=%d Durability=%.1f MinSpeedToWipe=%.2f WipeRadius=%.3f"),
+			bReadLeapInputInCpp ? 1 : 0,
+			CurrentDurability, MinSpeedToWipe, WipeRadius);
+	}
 }
 
 // =============================================================================
@@ -56,17 +61,15 @@ void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPositi
 	HandScreenPosition = ClampedHandScreenPosition;
 	HandSpeed             = FMath::Max(0.0f, Speed);
 
-	// [DIAG] パッケージ版でも残るように Warning レベル。1秒に1回だけ出力（毎フレームはスパム）
-	static double LastDiagTime = 0.0;
-	const double Now = FPlatformTime::Seconds();
-	if (bDebugLeapInput && Now - LastDiagTime > 1.0)
+	if (bDebugLeapInput && (!bHasLoggedBlueprintInputState || bDetected != bLastLoggedBlueprintInputDetected))
 	{
-		LastDiagTime = Now;
+		bHasLoggedBlueprintInputState = true;
+		bLastLoggedBlueprintInputDetected = bDetected;
 		UE_LOG(LogTemp, Warning,
-			TEXT("[TowelDiag] UpdateHandData Detected=%d Raw=(%.3f,%.3f) Speed=%.2f (MinSpeedToWipe=%.1f)"),
+			TEXT("[TowelDiag] UpdateHandData Detected=%d Raw=(%.3f,%.3f) Speed=%.2f"),
 			bDetected ? 1 : 0,
 			ScreenPosition.X, ScreenPosition.Y,
-			Speed, MinSpeedToWipe);
+			Speed);
 	}
 }
 
@@ -78,6 +81,8 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	PollLeapInputFromCpp(DeltaTime);
+
 	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
 
@@ -85,6 +90,10 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 	bHasValidInput = false;
 	bUsingGraceInput = false;
 	ProcessedHandSpeed = 0.0f;
+	bWipeAttemptedThisFrame = false;
+	bWipeHadDirtManagerThisFrame = false;
+	LastWipeAmount = 0.0f;
+	LastAdjustedWipeRadius = 0.0f;
 
 	if (bHandDetected)
 	{
@@ -132,7 +141,11 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		// 拭き音を止める（手が離れたら即停止）
 		UpdateWipeSound(false);
 
-		if (HUD) { HUD->HideCursor(); }
+		if (HUD && bTowelShownOnHUD)
+		{
+			HUD->HideTowel();
+			bTowelShownOnHUD = false;
+		}
 		return;
 	}
 
@@ -141,11 +154,13 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 
 	if (HUD)
 	{
-		const FVector2D ScreenPos(
-			ClampedHandScreenPosition.X * HUD->MainWidth,
-			ClampedHandScreenPosition.Y * HUD->MainHeight);
-		HUD->UpdateCursorPosition(ScreenPos);
-		HUD->ShowCursor();
+		// Leapタオルはスマホ用カーソルではなく、メイン画面DirtOverlay上のIMG_Towelを動かす。
+		HUD->UpdateTowelPosition(ClampedHandScreenPosition);
+		if (!bTowelShownOnHUD)
+		{
+			HUD->ShowTowel();
+			bTowelShownOnHUD = true;
+		}
 	}
 
 	// タオル交換中
@@ -192,35 +207,20 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 
 		const float Amount = WipeEfficiency * ProcessedHandSpeed * SpeedMultiplier * DeltaTime;
 		const float AdjustedWipeRadius = CalculateEdgeAdjustedWipeRadius(ClampedHandScreenPosition);
+		bWipeAttemptedThisFrame = true;
+		LastWipePosition = ClampedHandScreenPosition;
+		LastAdjustedWipeRadius = AdjustedWipeRadius;
+		LastWipeAmount = Amount;
 		if (ATomatoDirtManager* DirtMgr = GetDirtManager())
 		{
+			bWipeHadDirtManagerThisFrame = true;
 			DirtMgr->WipeDirtAt(ClampedHandScreenPosition, AdjustedWipeRadius, Amount);
-
-			// [DIAG] 1秒に1回だけ拭き量と DirtMgr 取得状態を出す
-			static double LastWipeDiagTime = 0.0;
-			const double Now2 = FPlatformTime::Seconds();
-			if (bDebugLeapInput && Now2 - LastWipeDiagTime > 1.0)
-			{
-				LastWipeDiagTime = Now2;
-				UE_LOG(LogTemp, Warning,
-					TEXT("[TowelDiag] Wipe Amount=%.4f Raw=(%.3f,%.3f) Smooth=(%.3f,%.3f) Clamp=(%.3f,%.3f) Valid=%d Grace=%d Speed=%.2f Radius=%.3f DirtMgr=OK"),
-					Amount,
-					RawHandScreenPosition.X, RawHandScreenPosition.Y,
-					SmoothedHandScreenPosition.X, SmoothedHandScreenPosition.Y,
-					ClampedHandScreenPosition.X, ClampedHandScreenPosition.Y,
-					bHasValidInput ? 1 : 0,
-					bUsingGraceInput ? 1 : 0,
-					ProcessedHandSpeed,
-					AdjustedWipeRadius);
-			}
 		}
 		else
 		{
-			static double LastNoMgrLogTime = 0.0;
-			const double Now3 = FPlatformTime::Seconds();
-			if (bDebugLeapInput && Now3 - LastNoMgrLogTime > 2.0)
+			if (bDebugLeapInput && !bWarnedMissingDirtManager)
 			{
-				LastNoMgrLogTime = Now3;
+				bWarnedMissingDirtManager = true;
 				UE_LOG(LogTemp, Warning,
 					TEXT("[TowelDiag] Wiping but DirtManager=NULL（レベルに ATomatoDirtManager 配置されてない可能性）"));
 			}
@@ -252,6 +252,171 @@ FVector2D ATomatinaTowelSystem::ClampNormalizedHandPosition(FVector2D Position) 
 	return FVector2D(
 		FMath::Clamp(Position.X, 0.0f, 1.0f),
 		FMath::Clamp(Position.Y, 0.0f, 1.0f));
+}
+
+void ATomatinaTowelSystem::PollLeapInputFromCpp(float DeltaTime)
+{
+	if (!bReadLeapInputInCpp)
+	{
+		SetLeapInputStatus(TEXT("C++ Leap input disabled"));
+		return;
+	}
+
+	if (!LeapComponent)
+	{
+		SetLeapInputStatus(TEXT("LeapComponent is null"));
+		UpdateHandData(false, RawHandScreenPosition, 0.0f);
+		bHasLastCppLeapScreenPosition = false;
+		bLastCppLeapHadSelectedHand = false;
+		return;
+	}
+
+	FLeapFrameData Frame;
+	LeapComponent->GetLatestFrameData(Frame, bApplyLeapDeviceOrigin);
+	bLeapComponentHasDevice = LeapComponent->IsActiveDevicePluggedIn();
+	LeapComponent->AreHandsVisible(bLastLeapLeftVisible, bLastLeapRightVisible);
+
+	bool bUsedPluginFallback = false;
+	if (Frame.Hands.Num() == 0 && bUseUltraleapPluginFallback && IUltraleapTrackingPlugin::IsAvailable())
+	{
+		FLeapFrameData FallbackFrame;
+		IUltraleapTrackingPlugin::Get().GetLatestFrameData(FallbackFrame, LeapDeviceSerial);
+		if (FallbackFrame.Hands.Num() > 0 || FallbackFrame.NumberOfHandsVisible > 0)
+		{
+			Frame = FallbackFrame;
+			bUsedPluginFallback = true;
+		}
+	}
+
+	LastLeapFrameHandCount = FMath::Max(Frame.Hands.Num(), Frame.NumberOfHandsVisible);
+	LastLeapFrameId = Frame.FrameId;
+	LastLeapFrameTimeStamp = Frame.TimeStamp;
+	bLastLeapLeftVisible = Frame.LeftHandVisible;
+	bLastLeapRightVisible = Frame.RightHandVisible;
+
+	FLeapHandData SelectedHand;
+	if (!TryGetSelectedLeapHand(Frame, SelectedHand))
+	{
+		if (Frame.Hands.Num() > 0)
+		{
+			SetLeapInputStatus(TEXT("Leap frame received, but selected hand was not found"));
+		}
+		else if (!bLeapComponentHasDevice && !bUsedPluginFallback)
+		{
+			SetLeapInputStatus(TEXT("Leap device is not active on LeapComponent"));
+		}
+		else
+		{
+			SetLeapInputStatus(TEXT("Leap frame has no hands"));
+		}
+		UpdateHandData(false, RawHandScreenPosition, 0.0f);
+		bHasLastCppLeapScreenPosition = false;
+		bLastCppLeapHadSelectedHand = false;
+		return;
+	}
+
+	LastSelectedLeapPalmRawPosition = SelectedHand.Palm.Position;
+	LastSelectedLeapPalmStabilizedPosition = SelectedHand.Palm.StabilizedPosition;
+
+	const bool bHasStabilizedPosition = !SelectedHand.Palm.StabilizedPosition.IsNearlyZero();
+	const FVector PalmPosition = (bUseStabilizedPalmPosition && bHasStabilizedPosition)
+		? SelectedHand.Palm.StabilizedPosition
+		: SelectedHand.Palm.Position;
+	LastSelectedLeapPalmPosition = PalmPosition;
+	const FVector2D ScreenPosition = ConvertLeapPositionToScreen(PalmPosition);
+
+	float Speed = 0.0f;
+	const float SafeDeltaTime = FMath::Max(DeltaTime, KINDA_SMALL_NUMBER);
+	if (bHasLastCppLeapScreenPosition)
+	{
+		// C++ 直接入力では BP 由来の速度がないため、Raw 正規化座標差分から速度を作る。
+		// Clamp/スムージング後では端張り付きや遅延で速度が鈍るので、ここでは未加工座標を使う。
+		Speed = FVector2D::Distance(ScreenPosition, LastCppLeapScreenPosition) / SafeDeltaTime * LeapInputSpeedScale;
+	}
+
+	LastCppLeapScreenPosition = ScreenPosition;
+	bHasLastCppLeapScreenPosition = true;
+	UpdateHandData(true, ScreenPosition, Speed);
+	SetLeapInputStatus(bUsedPluginFallback ? TEXT("Tracking hand via plugin fallback") : TEXT("Tracking hand via LeapComponent"));
+
+	if (bDebugLeapInput && !bLastCppLeapHadSelectedHand)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[TowelDiag] CppLeap selected Hand=%d Palm=(%.2f,%.2f,%.2f) ScreenRaw=(%.3f,%.3f) Fallback=%d"),
+			static_cast<int32>(SelectedHand.HandType.GetValue()),
+			PalmPosition.X, PalmPosition.Y, PalmPosition.Z,
+			ScreenPosition.X, ScreenPosition.Y,
+			bUsedPluginFallback ? 1 : 0);
+	}
+	bLastCppLeapHadSelectedHand = true;
+}
+
+void ATomatinaTowelSystem::SetLeapInputStatus(const FString& NewStatus)
+{
+	if (LastLeapInputStatus == NewStatus)
+	{
+		return;
+	}
+
+	LastLeapInputStatus = NewStatus;
+	if (bDebugLeapInput)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[TowelDiag] %s"), *LastLeapInputStatus);
+	}
+}
+
+bool ATomatinaTowelSystem::TryGetSelectedLeapHand(const FLeapFrameData& Frame, FLeapHandData& OutHand) const
+{
+	for (const FLeapHandData& Hand : Frame.Hands)
+	{
+		const EHandType HandType = Hand.HandType.GetValue();
+		const bool bMatchesSelection =
+			LeapHandSelection == ELeapTowelHandSelection::Any ||
+			(LeapHandSelection == ELeapTowelHandSelection::Left && HandType == LEAP_HAND_LEFT) ||
+			(LeapHandSelection == ELeapTowelHandSelection::Right && HandType == LEAP_HAND_RIGHT);
+
+		if (bMatchesSelection)
+		{
+			OutHand = Hand;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+FVector2D ATomatinaTowelSystem::ConvertLeapPositionToScreen(FVector LeapPosition) const
+{
+	const float Horizontal = ReadLeapAxis(LeapPosition, LeapHorizontalAxis);
+	const float Vertical = ReadLeapAxis(LeapPosition, LeapVerticalAxis);
+	const FVector2D SafeHalfRange(
+		FMath::Max(LeapInputHalfRange.X, 1.0f),
+		FMath::Max(LeapInputHalfRange.Y, 1.0f));
+
+	return FVector2D(
+		0.5f + (Horizontal - LeapInputCenter.X) / (SafeHalfRange.X * 2.0f),
+		0.5f - (Vertical - LeapInputCenter.Y) / (SafeHalfRange.Y * 2.0f));
+}
+
+float ATomatinaTowelSystem::ReadLeapAxis(FVector LeapPosition, ELeapTowelAxis Axis) const
+{
+	switch (Axis)
+	{
+	case ELeapTowelAxis::X:
+		return LeapPosition.X;
+	case ELeapTowelAxis::Y:
+		return LeapPosition.Y;
+	case ELeapTowelAxis::Z:
+		return LeapPosition.Z;
+	case ELeapTowelAxis::NegativeX:
+		return -LeapPosition.X;
+	case ELeapTowelAxis::NegativeY:
+		return -LeapPosition.Y;
+	case ELeapTowelAxis::NegativeZ:
+		return -LeapPosition.Z;
+	default:
+		return LeapPosition.Y;
+	}
 }
 
 FVector2D ATomatinaTowelSystem::ApplyHandSmoothing(FVector2D RawPosition, float DeltaTime)
@@ -365,14 +530,6 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 		FMath::Abs(TowelNormPos.X - NormZoomCenter.X) < ViewHalfSize &&
 		FMath::Abs(TowelNormPos.Y - NormZoomCenter.Y) < ViewHalfSize;
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaTowelSystem::CheckTowelInView: "
-		     "Towel=(%.2f,%.2f) ZoomCenter=(%.2f,%.2f) HalfSize=%.3f → %s"),
-		TowelNormPos.X, TowelNormPos.Y,
-		NormZoomCenter.X, NormZoomCenter.Y,
-		ViewHalfSize,
-		bInView ? TEXT("映込") : TEXT("範囲外"));
-
 	return bInView;
 }
 
@@ -382,14 +539,21 @@ bool ATomatinaTowelSystem::CheckTowelInView(FVector2D TowelNormPos)
 
 ATomatoDirtManager* ATomatinaTowelSystem::GetDirtManager()
 {
-	if (!CachedDirtManager)
+	if (IsValid(DirtManagerOverride))
+	{
+		CachedDirtManager = DirtManagerOverride;
+		return CachedDirtManager;
+	}
+
+	if (!IsValid(CachedDirtManager))
 	{
 		AActor* Found = UGameplayStatics::GetActorOfClass(
 			GetWorld(), ATomatoDirtManager::StaticClass());
 		CachedDirtManager = Cast<ATomatoDirtManager>(Found);
 
-		if (!CachedDirtManager)
+		if (!CachedDirtManager && bDebugLeapInput && !bWarnedMissingDirtManager)
 		{
+			bWarnedMissingDirtManager = true;
 			UE_LOG(LogTemp, Warning,
 				TEXT("ATomatinaTowelSystem::GetDirtManager: "
 				     "ATomatoDirtManager がレベル上に見つかりません"));
@@ -412,8 +576,9 @@ ATomatinaPlayerPawn* ATomatinaTowelSystem::GetPlayerPawn()
 			CachedPlayerPawn = Cast<ATomatinaPlayerPawn>(PC->GetPawn());
 		}
 
-		if (!CachedPlayerPawn)
+		if (!CachedPlayerPawn && bDebugLeapInput && !bWarnedMissingPlayerPawn)
 		{
+			bWarnedMissingPlayerPawn = true;
 			UE_LOG(LogTemp, Warning,
 				TEXT("ATomatinaTowelSystem::GetPlayerPawn: "
 				     "ATomatinaPlayerPawn の取得に失敗"));

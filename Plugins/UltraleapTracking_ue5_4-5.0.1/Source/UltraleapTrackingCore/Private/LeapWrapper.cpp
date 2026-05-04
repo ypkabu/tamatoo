@@ -22,7 +22,9 @@ FLeapWrapper::FLeapWrapper()
 	, InterpolatedFrame(nullptr)
 	, InterpolatedFrameSize(0)
 {
-	UseOpenXR = true;
+	// This project uses desktop LeapC tracking, not OpenXR hand tracking.
+	// Keeping this false avoids creating a temporary OpenXR device when no HMD/XR system exists.
+	UseOpenXR = false;
 
 	if (!HasDeactivateHandle.IsValid())
 	{

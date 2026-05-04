@@ -72,6 +72,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Spawn")
 	TArray<ATomatinaTargetBase*> ActiveTargets;
 
+	/** ターゲットスポーン詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawn|Debug")
+	bool bDebugSpawnerLog = false;
+
 	// =========================================================================
 	// 関数
 	// =========================================================================

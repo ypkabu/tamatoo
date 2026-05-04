@@ -36,7 +36,10 @@ ATomatinaHUD::ATomatinaHUD()
 // =============================================================================
 void ATomatinaHUD::BeginPlay()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 開始"));
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 開始"));
+	}
 	Super::BeginPlay();
 
 	APlayerController* PC = GetOwningPlayerController();
@@ -55,10 +58,13 @@ void ATomatinaHUD::BeginPlay()
 		PhoneHeight             = Pawn->PhoneHeight;
 		bTestMode               = Pawn->bTestMode;
 		bUseSeparatePhoneWindow = Pawn->bUseSeparatePhoneWindow;
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d bUseSeparatePhoneWindow=%d"),
-			MainWidth, MainHeight, PhoneWidth, PhoneHeight,
-			bTestMode ? 1 : 0, bUseSeparatePhoneWindow ? 1 : 0);
+		if (bDebugHUDLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: サイズ取得 Main=(%.0fx%.0f) Phone=(%.0fx%.0f) bTestMode=%d bUseSeparatePhoneWindow=%d"),
+				MainWidth, MainHeight, PhoneWidth, PhoneHeight,
+				bTestMode ? 1 : 0, bUseSeparatePhoneWindow ? 1 : 0);
+		}
 
 		if (!Pawn->SceneCapture_Zoom)
 		{
@@ -72,7 +78,10 @@ void ATomatinaHUD::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: PlayerPawn 取得失敗（デフォルト値使用）"));
+		if (bDebugHUDLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD: PlayerPawn 取得失敗（デフォルト値使用）"));
+		}
 	}
 
 	// ── ViewFinder (旧・スパンウィンドウ方式のときだけメインに追加) ──
@@ -143,7 +152,10 @@ void ATomatinaHUD::BeginPlay()
 		CreatePhoneWindow();
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 完了"));
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::BeginPlay 完了"));
+	}
 }
 
 // =============================================================================
@@ -199,8 +211,11 @@ void ATomatinaHUD::CreatePhoneWindow()
 			Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
 			Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
 			Slot->SetAlignment(FVector2D(0.f, 0.f));
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView を全面塗りに強制"));
+			if (bDebugHUDLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView を全面塗りに強制"));
+			}
 		}
 		else
 		{
@@ -251,9 +266,12 @@ void ATomatinaHUD::CreatePhoneWindow()
 	PhoneWindow->MoveWindowTo(ScreenPos);
 	PhoneWindow->Resize(ClientSize);
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD: 第二ウィンドウ(Phone) 生成 Pos=(%.0f,%.0f) Size=(%.0fx%.0f)"),
-		ScreenPos.X, ScreenPos.Y, ClientSize.X, ClientSize.Y);
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: 第二ウィンドウ(Phone) 生成 Pos=(%.0f,%.0f) Size=(%.0fx%.0f)"),
+			ScreenPos.X, ScreenPos.Y, ClientSize.X, ClientSize.Y);
+	}
 }
 
 // =============================================================================
@@ -342,11 +360,14 @@ void ATomatinaHUD::LayoutPhoneZoomImage(UUserWidget* Widget, FName PreferredImag
 	Slot->SetSize(FVector2D(SlotW, SlotH));
 	Slot->SetAlignment(FVector2D(0.f, 0.f));
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD: %s のズーム領域を配置 DPI=%.3f 画面ピクセル=(%.0f,%.0f)+(%.0f,%.0f) widget-space=(%.0f,%.0f)+(%.0f,%.0f)"),
-		WidgetLabel, Safe,
-		MainWidth, 0.f, PhoneWidth, PhoneHeight,
-		PhoneX, PhoneY, SlotW, SlotH);
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s のズーム領域を配置 DPI=%.3f 画面ピクセル=(%.0f,%.0f)+(%.0f,%.0f) widget-space=(%.0f,%.0f)+(%.0f,%.0f)"),
+			WidgetLabel, Safe,
+			MainWidth, 0.f, PhoneWidth, PhoneHeight,
+			PhoneX, PhoneY, SlotW, SlotH);
+	}
 }
 
 // =============================================================================
@@ -418,9 +439,12 @@ UImage* ATomatinaHUD::FindOrCreateZoomImage(UUserWidget* Widget, FName Preferred
 		Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
 	}
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaHUD: %s に IMG_ZoomView_Runtime を実行時生成しました (親全面塗り)"),
-		WidgetLabel);
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s に IMG_ZoomView_Runtime を実行時生成しました (親全面塗り)"),
+			WidgetLabel);
+	}
 
 	return RuntimeZoomImage;
 }
@@ -466,9 +490,12 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 			ImageWidget->SetBrushFromMaterial(DMI);
 			ImageWidget->SetColorAndOpacity(FLinearColor::White);
 			PhoneZoomDMI = DMI;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial(DMI) をバインド (RT param 注入)"),
-				WidgetLabel);
+			if (bDebugHUDLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial(DMI) をバインド (RT param 注入)"),
+					WidgetLabel);
+			}
 			return true;
 		}
 	}
@@ -484,9 +511,12 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 		}
 		ImageWidget->SetBrush(Brush);
 		ImageWidget->SetColorAndOpacity(FLinearColor::White);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: %s に RT_Zoom を直接バインド (RT=%dx%d)"),
-			WidgetLabel, ZoomRT->SizeX, ZoomRT->SizeY);
+		if (bDebugHUDLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: %s に RT_Zoom を直接バインド (RT=%dx%d)"),
+				WidgetLabel, ZoomRT->SizeX, ZoomRT->SizeY);
+		}
 		return true;
 	}
 
@@ -494,9 +524,12 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 	{
 		ImageWidget->SetBrushFromMaterial(ZoomDisplayMaterial);
 		ImageWidget->SetColorAndOpacity(FLinearColor::White);
-		UE_LOG(LogTemp, Warning,
-			TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial をバインドしました（RT 未検出のため）"),
-			WidgetLabel);
+		if (bDebugHUDLog)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaHUD: %s に ZoomDisplayMaterial をバインドしました（RT 未検出のため）"),
+				WidgetLabel);
+		}
 		return true;
 	}
 
@@ -640,7 +673,10 @@ void ATomatinaHUD::UpdateCursorPosition(FVector2D Pos)
 // =============================================================================
 void ATomatinaHUD::ShowCursor()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor"));
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::ShowCursor"));
+	}
 
 	if (bUseSeparatePhoneWindow && PhoneViewWidget)
 	{
@@ -657,7 +693,10 @@ void ATomatinaHUD::ShowCursor()
 
 void ATomatinaHUD::HideCursor()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor"));
+	if (bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaHUD::HideCursor"));
+	}
 
 	if (bUseSeparatePhoneWindow && PhoneViewWidget)
 	{

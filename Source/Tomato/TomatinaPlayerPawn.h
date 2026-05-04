@@ -13,6 +13,7 @@ class USceneCaptureComponent2D;
 class APlayerController;
 class UInputMappingContext;
 class UInputAction;
+class ULeapComponent;
 
 /**
  * カメラマン 1P のポーン。
@@ -39,6 +40,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Camera")
 	USceneCaptureComponent2D* SceneCapture_Zoom;
 
+	/**
+	 * Deprecated compatibility component for old BP_TomatinaPlayerPawn Leap events.
+	 * Towel control now reads Leap input in ATomatinaTowelSystem, so this stays inactive.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LeapMotion|Deprecated")
+	ULeapComponent* Leap = nullptr;
+
 	// ──────────────────────────────────────────────
 	// 画面サイズ（BP で一元設定する 4 変数）
 	// GameMode / HUD は BeginPlay で Pawn から取得
@@ -60,6 +68,10 @@ public:
 	// ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
 	bool bTestMode = true;
+
+	/** PlayerPawn の詳細ログ。通常はOFF。入力/ズーム/画面配置調査時だけON。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Debug")
+	bool bDebugPlayerLog = false;
 
 	// ──────────────────────────────────────────────
 	// 第二ウィンドウ方式 (スマホ側を独立 SWindow に出す)
@@ -121,6 +133,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
 	float ZoomNearClippingPlane = 20.f;
 
+	/** ゲーム開始直後にスマホ側 RenderTarget を温めるための短時間キャプチャ秒数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom|Capture", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float InitialPhoneCaptureSeconds = 0.35f;
+
+	/** ズーム開始/解除前後の見た目を破綻させないための短時間キャプチャ秒数 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom|Capture", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float ZoomTransitionCaptureSeconds = 0.25f;
+
 	/** 虚空（空）をクリックしたときに仮想ヒット位置として使う距離 (cm)。
 	 *  これにより空にいる鳥等にもズームして撮影できる。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Zoom")
@@ -171,4 +191,10 @@ private:
 
 	// Tick で消費されるマウス入力（Triggered で蓄積）
 	FVector2D CurrentLookInput = FVector2D::ZeroVector;
+
+	float PhoneCaptureBurstRemaining = 0.f;
+
+	void RequestPhoneCaptureBurst(float Duration);
+	void UpdatePhoneSceneCapture(float DeltaTime);
+	void CapturePhoneSceneNow();
 };

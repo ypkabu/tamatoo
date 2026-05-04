@@ -3,8 +3,11 @@
 #include "TomatinaCrowdMember.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+
+#include "TomatinaGameMode.h"
 
 // =============================================================================
 // コンストラクタ
@@ -25,6 +28,8 @@ ATomatinaCrowdMember::ATomatinaCrowdMember()
 	MeshComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 	MeshComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	MeshComp->SetGenerateOverlapEvents(false);
+	MeshComp->PrimaryComponentTick.bTickEvenWhenPaused = true;
+	MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 }
 
 // =============================================================================
@@ -82,11 +87,26 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	const ATomatinaGameMode* GameMode = Cast<ATomatinaGameMode>(
+		UGameplayStatics::GetGameMode(this));
+	const bool bUseRealDelta = (GameMode && (GameMode->bInCountdown || GameMode->bIsLoading));
+	const float EffectiveDeltaTime = bUseRealDelta
+		? FApp::GetDeltaTime()
+		: DeltaTime;
+
+	if (bUseRealDelta && MeshComp && EffectiveDeltaTime > 0.f)
+	{
+		// GlobalTimeDilation=0 中は SkeletalMeshComponent の通常アニメ Tick が 0 秒になりやすい。
+		// 観客だけはカウントダウン中も動かしたいので、実時間でポーズを進める。
+		MeshComp->TickAnimation(EffectiveDeltaTime, false);
+		MeshComp->RefreshBoneTransforms();
+	}
+
 	// 汚れ累積（常に進行。待機中でも時間は経過する）
 	if (DirtAccumulationTime > 0.f && CurrentDirtAmount < MaxDirtAmount && MeshComp)
 	{
 		const float Rate = MaxDirtAmount / DirtAccumulationTime;
-		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * DeltaTime, MaxDirtAmount);
+		CurrentDirtAmount = FMath::Min(CurrentDirtAmount + Rate * EffectiveDeltaTime, MaxDirtAmount);
 
 		// オーバーレイ方式（推奨）：DMI に直接書く
 		if (DirtOverlayMID)
@@ -102,7 +122,7 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 
 	if (StartJitterTimer > 0.f)
 	{
-		StartJitterTimer -= DeltaTime;
+		StartJitterTimer -= EffectiveDeltaTime;
 		return;
 	}
 
@@ -113,7 +133,7 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 		// ── 状態継続管理（Burst / Cheer）─────────────────────────
 		if (CurrentAction == ECrowdAction::Burst || CurrentAction == ECrowdAction::Cheer)
 		{
-			ActionTimer -= DeltaTime;
+			ActionTimer -= EffectiveDeltaTime;
 			if (ActionTimer <= 0.f)
 			{
 				EnterAction(ECrowdAction::Wander);
@@ -123,7 +143,7 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 		// ── 徘徊中の行動切替抽選 ────────────────────────────────
 		if (CurrentAction == ECrowdAction::Wander)
 		{
-			ActionCheckTimer -= DeltaTime;
+			ActionCheckTimer -= EffectiveDeltaTime;
 			if (ActionCheckTimer <= 0.f)
 			{
 				ActionCheckTimer = ActionCheckInterval + FMath::FRandRange(-ActionCheckVariance, ActionCheckVariance);
@@ -145,7 +165,7 @@ void ATomatinaCrowdMember::Tick(float DeltaTime)
 		}
 	}
 
-	TickMovement(DeltaTime);
+	TickMovement(EffectiveDeltaTime);
 }
 
 // =============================================================================

@@ -21,6 +21,7 @@
 ATomatinaGameMode::ATomatinaGameMode()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	TowelSystemClass = ATomatinaTowelSystem::StaticClass();
 }
 
 // =============================================================================
@@ -51,6 +52,8 @@ void ATomatinaGameMode::BeginPlay()
 		UE_LOG(LogTemp, Error,
 			TEXT("ATomatinaGameMode: TargetSpawner がレベルに未配置"));
 	}
+
+	EnsureTowelSystemExists();
 
 	// ミッションシャッフル
 	if (bRandomOrder) { ShuffleMissions(); }
@@ -952,4 +955,34 @@ void ATomatinaGameMode::PushStylishStateToHUD()
 		const bool bDanger = (DirtCoverage01 >= StylishDirtDangerThreshold);
 		HUD->UpdateStylishDisplay(GetStylishRankName(StylishRank).ToString(), GaugePercent, StylishComboCount, bDanger);
 	}
+}
+
+void ATomatinaGameMode::EnsureTowelSystemExists()
+{
+	if (!bEnsureTowelSystemExists || !GetWorld())
+	{
+		return;
+	}
+
+	if (AActor* Existing = UGameplayStatics::GetActorOfClass(GetWorld(), ATomatinaTowelSystem::StaticClass()))
+	{
+		CachedTowelSystem = Cast<ATomatinaTowelSystem>(Existing);
+		return;
+	}
+
+	TSubclassOf<ATomatinaTowelSystem> ClassToSpawn = TowelSystemClass;
+	if (!ClassToSpawn)
+	{
+		ClassToSpawn = ATomatinaTowelSystem::StaticClass();
+	}
+	if (!ClassToSpawn)
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Name = TEXT("TomatinaTowelSystem_Auto");
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	CachedTowelSystem = GetWorld()->SpawnActor<ATomatinaTowelSystem>(
+		ClassToSpawn, FTransform::Identity, SpawnParams);
 }

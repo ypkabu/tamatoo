@@ -88,6 +88,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	bool bEnableAutoSpawn = false;
 
+	/** 汚れ生成/消去/HUD通知の詳細ログ。通常は OFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Debug")
+	bool bDebugDirtLog = false;
+
 	/** 自動生成の基本間隔（秒）。bEnableAutoSpawn が true のときだけ使う */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Dirt|Config")
 	float SpawnInterval = 3.0f;

@@ -31,6 +31,10 @@ public:
 	UPROPERTY(EditAnywhere, Category="Spawner")
 	TSubclassOf<ATomatinaProjectile> ProjectileClass;
 
+	/** スポナーの詳細ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner|Debug")
+	bool bDebugSpawnerLog = false;
+
 	/** スポーン間隔の基準値（秒） */
 	UPROPERTY(EditAnywhere, Category="Spawner")
 	float SpawnInterval = 2.0f;

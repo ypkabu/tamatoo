@@ -151,8 +151,11 @@ void ATomatinaTargetSpawner::SpawnTargetsForMission(const FMissionData& Mission)
 
 		if (!Target)
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaTargetSpawner: SpawnActor に失敗 (i=%d)"), i);
+			if (bDebugSpawnerLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaTargetSpawner: SpawnActor に失敗 (i=%d)"), i);
+			}
 			continue;
 		}
 
@@ -184,16 +187,22 @@ void ATomatinaTargetSpawner::SpawnTargetsForMission(const FMissionData& Mission)
 
 		ActiveTargets.Add(Target);
 
-		UE_LOG(LogTemp, Log,
-			TEXT("ATomatinaTargetSpawner: スポーン完了 Type=%s Class=%s Loc=(%.0f,%.0f,%.0f)"),
-			*Mission.TargetType.ToString(),
-			*GetNameSafe(PickedClass),
-			SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z);
+		if (bDebugSpawnerLog)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("ATomatinaTargetSpawner: スポーン完了 Type=%s Class=%s Loc=(%.0f,%.0f,%.0f)"),
+				*Mission.TargetType.ToString(),
+				*GetNameSafe(PickedClass),
+				SpawnLoc.X, SpawnLoc.Y, SpawnLoc.Z);
+		}
 	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaTargetSpawner::SpawnTargetsForMission: '%s' 計 %d 体"),
-		*Mission.SpawnProfileName.ToString(), ActiveTargets.Num());
+	if (bDebugSpawnerLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaTargetSpawner::SpawnTargetsForMission: '%s' 計 %d 体"),
+			*Mission.SpawnProfileName.ToString(), ActiveTargets.Num());
+	}
 }
 
 // =============================================================================

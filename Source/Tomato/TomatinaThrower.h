@@ -44,6 +44,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Thrower")
 	USkeletalMeshComponent* MeshComp;
 
+	/** 投げ手の歩行・投擲・発射ログ。通常はOFF。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Thrower|Debug")
+	bool bDebugThrowerLog = false;
+
 	// =========================================================================
 	// アニメーション
 	// =========================================================================

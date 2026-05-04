@@ -49,9 +49,12 @@ void ATomatinaThrower::BeginPlay()
 		bIsWalking = false;
 	}
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaThrower [%s]: BeginPlay State=%d AimAtPlayerChance=%.2f Interval=%.2f"),
-		*GetName(), static_cast<int32>(State), AimAtPlayerChance, ThrowInterval);
+	if (bDebugThrowerLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaThrower [%s]: BeginPlay State=%d AimAtPlayerChance=%.2f Interval=%.2f"),
+			*GetName(), static_cast<int32>(State), AimAtPlayerChance, ThrowInterval);
+	}
 }
 
 // =============================================================================
@@ -103,7 +106,10 @@ void ATomatinaThrower::TickWalk(float DeltaTime)
 		bStartDelayActive = false;
 		ThrowTimer = 0.f;
 		OnArrivedAtDestination();
-		UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: 目的地到着・即投擲モード"), *GetName());
+		if (bDebugThrowerLog)
+		{
+			UE_LOG(LogTemp, Log, TEXT("ATomatinaThrower [%s]: 目的地到着・即投擲モード"), *GetName());
+		}
 		return;
 	}
 
@@ -163,9 +169,12 @@ void ATomatinaThrower::BeginWalkIn(FVector Destination)
 	State           = EThrowerState::WalkingIn;
 	bIsWalking      = true;
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaThrower [%s]: 歩行開始 → (%.0f,%.0f,%.0f)"),
-		*GetName(), Destination.X, Destination.Y, Destination.Z);
+	if (bDebugThrowerLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaThrower [%s]: 歩行開始 → (%.0f,%.0f,%.0f)"),
+			*GetName(), Destination.X, Destination.Y, Destination.Z);
+	}
 }
 
 // =============================================================================
@@ -192,8 +201,11 @@ void ATomatinaThrower::StartThrow()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaThrower [%s]: AnimInstance が無い（AnimBP 未設定）"), *GetName());
+			if (bDebugThrowerLog)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("ATomatinaThrower [%s]: AnimInstance が無い（AnimBP 未設定）"), *GetName());
+			}
 		}
 	}
 
@@ -221,7 +233,10 @@ void ATomatinaThrower::ReleaseTomato()
 {
 	if (!ProjectileClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrower [%s]: ProjectileClass 未設定"), *GetName());
+		if (bDebugThrowerLog)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ATomatinaThrower [%s]: ProjectileClass 未設定"), *GetName());
+		}
 		return;
 	}
 
@@ -267,9 +282,12 @@ void ATomatinaThrower::ReleaseTomato()
 		Tomato->CurveDirection = (FMath::FRand() > 0.5f) ? 1.f : -1.f;
 	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("ATomatinaThrower [%s]: 発射 Traj=%d → (%.0f,%.0f,%.0f)"),
-		*GetName(), static_cast<int32>(Traj), AimLoc.X, AimLoc.Y, AimLoc.Z);
+	if (bDebugThrowerLog)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("ATomatinaThrower [%s]: 発射 Traj=%d → (%.0f,%.0f,%.0f)"),
+			*GetName(), static_cast<int32>(Traj), AimLoc.X, AimLoc.Y, AimLoc.Z);
+	}
 }
 
 // =============================================================================

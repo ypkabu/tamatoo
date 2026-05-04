@@ -56,9 +56,12 @@ void ATomatinaCrowdManager::SpawnAll()
 		}
 	}
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("ATomatinaCrowdManager: スポーン完了 計%d 体"),
-		LiveMembers.Num());
+	if (bDebugCrowdLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaCrowdManager: スポーン完了 計%d 体"),
+			LiveMembers.Num());
+	}
 }
 
 // =============================================================================

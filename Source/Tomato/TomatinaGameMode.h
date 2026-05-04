@@ -16,6 +16,7 @@ class UAudioComponent;
 class ATomatinaTargetSpawner;
 class ATomatinaHUD;
 class ATomatoDirtManager;
+class ATomatinaTowelSystem;
 
 // -----------------------------------------------------------------------------
 // FMissionData — 1 ミッション分の設定
@@ -404,4 +405,16 @@ public:
 	float SyncWindowSeconds = 2.0f;
 
 private:
+	/** レベルにタオルシステムがない場合に C++ 側で自動生成する。 */
+	UPROPERTY(EditAnywhere, Category="Tomatina|Towel")
+	bool bEnsureTowelSystemExists = true;
+
+	/** 自動生成するタオルシステム。BP派生を使う場合は GameMode Details で設定。 */
+	UPROPERTY(EditAnywhere, Category="Tomatina|Towel", meta=(EditCondition="bEnsureTowelSystemExists"))
+	TSubclassOf<ATomatinaTowelSystem> TowelSystemClass;
+
+	UPROPERTY()
+	ATomatinaTowelSystem* CachedTowelSystem = nullptr;
+
+	void EnsureTowelSystemExists();
 };
