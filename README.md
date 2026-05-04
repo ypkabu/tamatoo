@@ -1,163 +1,21 @@
-# Wipe&Snap
-
-スペインのトマト祭り「La Tomatina」をモチーフにした、2人協力プレイの体験型撮影ゲームです。  
-1Pはカメラマンとして自作カメラ型コントローラーを構え、群衆の中からお題の被写体を探して撮影します。  
-2PはLeap Motion Controllerで手を動かし、トマトで汚れたレンズを拭き取って1Pの撮影を支援します。
-
-## プロジェクト概要
-
-- **タイトル**: Wipe&Snap（リポジトリ名 `Wipe&-nap_UE5`）
-- **ジャンル**: 2人協力 / 体験型 / ハードウェア連動
-- **想定設置環境**: モニター + スマートフォン画面（デュアルディスプレイ）+ LeapMotion
-- **プレイ人数**: 2 人（1P=カメラマン、2P=タオル拭き取り）
-- **想定プレイ時間**: 3分ほど
-- **用途**: 学内展示 / 試遊会 
-
-## デモ
-
-- プレイ動画: URL
-- Zenn: URL
-- 写真 / GIF: 追加予定
-
-## 自分の担当
-
-私は主に、1P/2Pの操作体験に関わるクライアント実装を担当しました。
-
-- スマホ表示用 `SWindow` の生成
-- `SceneCapture2D` + `RenderTarget` によるズームファインダー
-- Leap Motion Controllerの手速度を使った拭き取り判定
-- ズームカメラの壁抜け対策
-- `ProfileGPU` による描画負荷確認とトマト影設定の改善
-- 展示環境での表示安定化
-
-| 担当者 | 主な担当 |
-| 自分 | ゲーム体験の企画、UE5/C++実装、スマホ表示用SWindow、SceneCapture2D + RenderTargetによるズームファインダー、Leap Motion Controllerによる拭き取り判定、UI/UX調整 |
-| メンバーA | 3Dモデル、アニメーション調整、モデルアタッチ、ワールドへのアクター配置、街並みの作成、Blueprintでの敵キャラの動き調整 |
-| メンバーB | イラスト、背景作成 |
-| メンバーC | ゲームルールの検討、制作補助、調整作業、カメラ型筐体製作など |
-
-筐体制作、3Dモデル、ステージ制作、サウンド、ゲームルール検討は主に他メンバーが担当しました。
-
-チーム制作のため、他メンバーが制作した素材・演出・レベル要素を自分の成果として誤解されないよう、担当範囲を分けて記載しています。
-
-### 操作概要
-
-| 役割 | 入力デバイス | 主な操作 |
-|------|--------------|----------|
-| 1P カメラマン | キーボード/コントローラ（Enhanced Input） | 視点移動・トマト発射・スマホ画面でズーム確認 |
-| 2P 拭き取り | LeapMotion（Ultraleap Tracking） | 手のジェスチャでメイン画面の汚れを拭く |
-
-## Unreal Engine のバージョン
-
-- **UE 5.7**（`Tomato.uproject` の `EngineAssociation` で確認済み）
-- ビルド構成: C++ + Blueprint
-- パッケージング: Monolithic（`Tomato.exe` 約 297MB）
-
-## 現在実装されている機能
-
-### ゲームプレイ
-
-- [x] 1P 
-- [x] 2P LeapMotion 拭き取り（`UTomatinaTowelSystem`）
-- [x] トマト発射（`ATomatinaProjectile`）と着弾位置への汚れ生成
-- [x] 汚れ管理（`ATomatoDirtManager`）
-  - 通常トマト（赤）: 円形範囲の Opacity 漸減
-  - 特殊トマト（黄、Sticky）: 連続ダッシュ × 4 回で剥がれる
-- [x] スタイリッシュランク（C / B / A / S / SSS）と Sync Rate 計測
-- [x] ミッション制ゲーム進行（`ATomatinaGameMode` 内 Missions 配列）
-- [x] 全汚れクリア演出 → 最終リザルトへの遷移
-
-### ハードウェア / 描画
-
-- [x] **デュアルウィンドウ表示**: `FSlateApplication::AddWindow` + 動的 `SWindow` 生成によりメイン画面とスマホ画面を別ウィンドウで描画
-- [x] スマホ画面に `RT_Zoom` レンダーターゲットを表示（`ConfigureZoomImageContent`、DMI 経由）
-- [x] DPI スケーリング補正（`UWidgetLayoutLibrary::GetViewportScale()`）
-- [x] UE 5.7 SceneCapture 自動キャプチャ問題の回避（Tick 内で `CaptureScene()` 手動呼び出し）
-- [x] ズームカメラの壁抜け対策（Sphere Sweep + Safety Margin + `CustomNearClippingPlane`）
-- [x] 空・無限遠ヒット対策（`SkyFallbackDistance` で仮想ヒット点）
-- [x] キャラクタ全体に汚れマスクを乗せる `SetOverlayMaterial`（UE 5.0+）
-
-### UI / 演出
-
-- [x] ポーズ可能な UI（`SetGlobalTimeDilation(0)` + `FApp::GetDeltaTime()`）
-- [x] 拭き取り SE のループ・エッジ検出（`UpdateWipeSound`）
-- [x] BeginPlay 前のプロパティ注入（`SpawnActorDeferred` + `FinishSpawning`）
-
-## 既知の問題・今後の改善
-
-現時点で把握している課題と、今後の改善方針です。
-
-| # | 課題 | 重要度 | 現状・原因 | 改善方針 |
-|---|------|--------|------------|----------|
-| 1 | スマホファインダーへの視線誘導が弱い | 高 | 試遊では、1Pがズーム中もメインモニターを見続ける場面が多かった。スマホ画面を見なくても最低限プレイできるため、スマホファインダーを見る必然性がまだ弱い。 | スマホ側にのみ表示される構図補助や高得点判定のヒントを追加し、スマホ画面を見るメリットを強める。ズーム開始時や撮影直前に視線誘導演出を入れる。 |
-| 2 | レベル開始時のスポーン処理によるカクつき | 高 | トマト・観客・投げる人などを開始時にまとめて生成しているため、処理が一時的に集中する。 | スポーン処理をフレーム分散する。動きの少ないオブジェクトは事前配置にする。トマトやエフェクトはオブジェクトプール化を検討する。 |
-| 3 | 大量生成オブジェクトの影による描画負荷 | 高 | `ProfileGPU` で `ShadowDepths` が大きいことを確認した。大量にスポーンするトマトの影が負荷に影響していた。 | トマトの影を無効化したところ、Frameが約31.7msから約23.7msへ改善した。今後は他の大量生成オブジェクトの影設定も見直す。 |
-| 4 | `SceneCapture2D` の更新負荷 | 中 | スマホファインダー映像の安定表示を優先し、現状は `CaptureScene()` を明示的に呼んでいる。表示は安定する一方、描画負荷が増える可能性がある。 | ズーム中のみ更新する、2フレームに1回更新する、`RenderTarget` 解像度を調整するなど、体験を損なわない範囲で負荷を下げる。 |
-| 5 | Leap Motion Controllerのパッケージビルドでの認識確認 | 中 | エディタ上では動作しているが、パッケージビルド時の認識やログ確認が必要。 | `Saved/Logs/Tomato.log` を確認し、`UltraleapTracking` プラグインの読み込み状況や入力取得状況を検証する。 |
-| 6 | スマホウィンドウ位置の手動調整 | 中 | 現状はスマホ用 `SWindow` の位置とサイズを手動指定しているため、展示環境によって微調整が必要になる。 | 接続ディスプレイ情報を取得し、スマホ用ウィンドウの自動配置ロジックを検討する。 |
-| 7 | カメラ型コントローラー筐体の完成度 | 低 | 現在の筐体は段ボール製で、操作体験の検証を優先した試作段階である。 | 今後は3Dプリンターを活用し、持ちやすさや見た目を改善する。 |
-| 8 | Leap Motion Controllerの検出範囲端での入力不安定 | 中 | 試遊中、Leap Motionの検出範囲端では、手の位置が一瞬外れたり、正規化座標が画面外に出たりして、拭き取り判定が不安定になることがあった。 | 手座標のClamp、画面端での拭き取り半径補正、短時間の入力補間を検討する。 |
-
-## 開発中・改善予定の機能
-
-現在、展示や試遊で得られた課題をもとに、以下の改善を進めています。
-
-| # | 項目 | 目的 | 状況 |
-|---|------|------|------|
-| 1 | スマホファインダーへの視線誘導改善 | 1Pがメイン画面だけでなく、自然にスマホファインダーを見るようにする | 検討中 |
-| 2 | スマホ側のみの構図補助・高得点ヒント表示 | スマホ画面を見るメリットをゲームルール側から強める | 設計検討中 |
-| 3 | ズーム開始時・撮影直前の視線誘導演出 | プレイヤーがスマホ画面へ視線を移すタイミングを作る | 設計検討中 |
-| 4 | `SceneCapture2D` の更新頻度制御 | スマホファインダー表示の安定性を保ちつつ描画負荷を下げる | 改善予定 |
-| 5 | `RenderTarget` 解像度の調整 | スマホ表示に必要な画質を維持しながら描画負荷を下げる | 改善予定 |
-| 6 | スポーン処理のフレーム分散 | レベル開始時にトマト・観客・投げる人を一括生成することによるカクつきを減らす | 改善予定 |
-| 7 | トマト・エフェクトのオブジェクトプール化 | 大量生成・破棄による負荷を抑える | 改善予定 |
-| 8 | 大量生成オブジェクトの影設定見直し | `ProfileGPU` で確認した `ShadowDepths` の負荷を下げる | 一部対応済み |
-| 9 | Leap Motion Controllerのパッケージビルド動作確認 | エディタ上だけでなく、パッケージ版でも安定して入力を取得できるか確認する | ログ確認中 |
-| 10 | スマホ用 `SWindow` の自動配置 | 展示環境ごとのウィンドウ位置調整をさらに減らす | 改善予定 |
-| 11 | カメラ型コントローラー筐体の改善 | 現在の段ボール製筐体から、より持ちやすく見た目の良い形状に改善する | 3Dプリンター活用を検討中 |
-| 12 | Leap Motion入力の範囲端補正 | 検出範囲端で手の位置が一瞬外れたり、正規化座標が画面外に出たりする問題を抑え、拭き取り操作が途切れにくい体験にする | 改善予定 |
-
-これらの課題は、現時点で未完成な点を隠すためではなく、試遊・計測を通して見えた改善対象として整理しています。特にスマホファインダーへの視線誘導と描画負荷は、今後の優先改善項目です。
-
-## ライセンス
-
-このリポジトリ内のコードおよび自作素材のライセンスは未設定です。第三者アセットは各配布元・購入元のライセンスに従います
-
-### 使用アセット・外部素材
-
-| 種別 | 配置場所 / ファイル | 出典・ライセンス確認 |
-|------|---------------------|----------------------|
-| Unreal Engine テンプレート / Starter 系素材 | `Content/FirstPerson/`, `Content/LevelPrototyping/`, `Content/Characters/Mannequins/`, `Content/Input/` | Epic Games / Unreal Engine 付属コンテンツ。Unreal Engine EULA / Epic Content License の範囲で使用。 |
-| Fab / Unreal Marketplace / Quixel 系 3D アセット | `Content/Fab/Gorilla/`, `Content/Fab/Megascans/3D/Trash_Bag_Pack_ve2hddjga/`, `Content/MSPresets/`, `Content/Fantastic_Dungeon_Pack/`, `Content/LowPolyMarket/`, `Content/ModularBuildingSet/`, `Content/RPGHeroSquad/`, `Content/Scanned3DPeoplePack/`, `Content/UFO/` | Fab Standard License または取得時の Marketplace ライセンスに従う。Fab Standard License は、プロジェクトへ組み込んだ形での商用/私的利用を許可する一方、アセット単体の再配布・再販売は禁止。 |
-| Fab / Megascans | `Content/mono/gomi/`, `Content/mono/Firehydrant/`, `Content/mono/gomibako/` | `Trash_Bag_Pack_ve2hddjga` 
-| Ultraleap Tracking Plugin | `Plugins/UltraleapTracking_ue5_4-5.0.1/` | Ultraleap Unreal Plugin。GitHub版は Apache License 2.0。実機利用には Ultraleap Tracking Software が必要。各ライセンス・利用規約に従って使用。 |
-| Freesound 環境音 | `Content/Sound/755969__lastraindrop__evening-food-market-atmosphere-at-street-side.uasset` | Freesound: “Evening food market atmosphere at street side” by `lastraindrop`。Creative Commons 0 (CC0)。 |
-| ニコニ・コモンズ | `Content/Sound/nc146963.uasset` | ニコニ・コモンズ素材。素材ページの利用条件に従って使用。 |
-| Pngtree 画像素材 | `Content/Assets/—Pngtree—white_crumpled_towel_after_use_13244949.uasset`, `Content/Tomato_Asset/pngtree-blood-splatter-drop-png-image_13534558.uasset` | Pngtree License Terms に従う。|
-| イラストくん素材 | `Content/Assets/illustkun-03200-tomato.uasset`, `Content/Assets/illustkun-03200-tomato_Sprite.uasset` | イラストくん利用規約に従う。個人・法人利用、商用利用は規約範囲内で可。素材自体の再配布・販売は禁止。 |
-| The Noun Project アイコン | `Content/Assets/noun-focus-point-4695835.uasset` | The Noun Project 素材。 |
-| SunoAI BGM | `Content/Sound/` 配下のBGMアセット | SunoAIで生成したBGMを使用。生成後、ゲームの雰囲気に合うものを選定し、音量や使用場面を調整して使用。利用規約に従って使用。 |
-| 生成AIによる汚れ画像素材 | レンズ汚れ・トマト汚れ表現に使用している画像アセット | image2で生成した汚れ画像をもとに、ゲーム内のレンズ汚れ表現として使用。必要に応じて見た目や透明度を調整し、ゲーム画面上での視認性を確認。 |
-
-
-### 参照した主なライセンス情報
-
-- Fab Standard License: https://www.fab.com/eula
-- Fab / Quixel Megascans: https://www.fab.com/sellers/Quixel%20Megascans/about
-- Ultraleap Unreal Plugin: https://github.com/ultraleap/UnrealPlugin
-- Freesound `755969`: https://freesound.org/people/lastraindrop/sounds/755969/
-- Pngtree License Terms: https://pngtree.com/legal/terms-of-license
-- イラストくん ご利用について: https://illustkun.com/about-use/
-- The Noun Project license help: https://help.thenounproject.com/hc/en-us/articles/200509798-What-licenses-do-you-offer-for-icons
-
-## 生成AIの利用について
-
-本プロジェクトでは、実装方針の整理、コード案の作成、既存コードの整理、バグ原因の仮説出し、READMEの整理に Claude Code および Codex を使用しました。
-
-ただし、最終的な仕様判断、プロジェクトへの組み込み、実機での動作確認、パラメータ調整、採用する実装方針の決定は自分で行いました。
-
-特に、スマホファインダー表示、`RenderTarget` 表示、Leap Motion入力、`ProfileGPU` による負荷確認では、AIの提案をそのまま使うのではなく、プロジェクトの要件に合わせて修正・検証しました。
-
-また、BGM素材の一部にSunoAI、レンズ汚れ表現の画像素材作成にimage2を使用しました。生成した素材はそのまま使うのではなく、ゲームの雰囲気や視認性に合うかを確認し、必要に応じて音量・見た目・透明度などを調整しました。
-
-本リポジトリにはAIによるコミットが含まれていますが、提出にあたっては自分の担当範囲とAI利用範囲を明記しています。
+Wipe&Snap
+スペインのトマト祭り「La Tomatina」をモチーフにした、2人協力プレイの体験型撮影ゲーム。1Pはカメラマンとして自作カメラ型コントローラーを構え、群衆の中からお題の被写体を探して撮影する。2PはLeap Motion Controllerで手を動かし、トマトで汚れたレンズを拭き取って1Pの撮影を支援する。
+プロジェクト概要
+	•	タイトル: Wipe&Snap (リポジトリ名 Wipe-Snap)
+	•	ジャンル: 2人協力 / 体験型 / ハードウェア連動
+	•	想定設置環境: モニター + スマートフォン画面(デュアルディスプレイ) + Leap Motion Controller
+	•	プレイ人数: 2人 (1P=カメラマン、2P=タオル拭き取り)
+	•	想定プレイ時間: 約3分
+	•	用途: 学内展示 / 試遊会
+デモ
+	•	プレイ動画: URL
+	•	Zenn 技術記事: URL
+	•	写真 / GIF: 追加予定
+自分の担当
+1P/2Pの操作体験まわりのクライアント実装を担当した。
+	•	スマホ表示用 SWindow の生成
+	•	SceneCapture2D + RenderTarget によるズームファインダー
+	•	Leap Motion Controllerの手の速度を使った拭き取り判定
+	•	ズームカメラの壁抜け対策
+	•	ProfileGPU による描画負荷確認とトマト影設定の改善
+	•	展示環境での表示安定化
