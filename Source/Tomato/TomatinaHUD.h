@@ -10,6 +10,7 @@
 class UUserWidget;
 class UTexture2D;
 class UMaterialInterface;
+class UTextBlock;
 class SWindow;
 
 /**
@@ -281,6 +282,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="HUD|Towel")
 	void UpdateTowelStatus(float DurabilityPercent, bool bSwapping);
 
+	UFUNCTION(BlueprintCallable, Category="HUD|Leap")
+	void UpdateLeapDistanceWarning(bool bVisible);
+
 protected:
 	// ── 永続 Widget ─────────────────────────────
 	UPROPERTY() UUserWidget* ViewFinderWidget     = nullptr;
@@ -302,6 +306,7 @@ protected:
 	UPROPERTY() UUserWidget* CountdownWidget      = nullptr;
 	UPROPERTY() UUserWidget* ShutterFlashWidget   = nullptr;
 	UPROPERTY() UUserWidget* LoadingWidget        = nullptr;
+	UPROPERTY() UTextBlock* RuntimeLeapDistanceWarningText = nullptr;
 
 private:
 	// シャッターフラッシュの実時間タイマー（TimeDilation=0 でも動く）

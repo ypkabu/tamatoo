@@ -170,6 +170,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Mapping", meta=(ClampMin="0.0", ClampMax="1000.0"))
 	float LeapInputSpeedScale = 100.0f;
 
+	/** 手がLeap Motionに近すぎるとき、画面に「手を離してね」警告を出す。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Too Close Warning")
+	bool bEnableLeapTooCloseWarning = true;
+
+	/** 近づきすぎ判定に使うLeap座標軸。机置き上向きでは通常Z。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Too Close Warning")
+	ELeapTowelAxis LeapTooCloseAxis = ELeapTowelAxis::Z;
+
+	/** この値以下なら近づきすぎ警告を表示する。単位は現在のLeap座標系に合わせる。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Too Close Warning")
+	float LeapTooCloseThreshold = -5.0f;
+
+	/** 警告解除用のしきい値。表示しきい値より少し大きくして点滅を防ぐ。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LeapMotion|Too Close Warning")
+	float LeapTooCloseClearThreshold = 0.0f;
+
+	/** 最後に読んだ近づきすぎ判定軸の値。実機調整用。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LeapMotion|Debug")
+	float LastLeapDistanceValue = 0.0f;
+
+	/** 現在、Leap Motionに手が近づきすぎていると判定しているか。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LeapMotion|Debug")
+	bool bLeapTooCloseToDevice = false;
+
 	// =========================================================================
 	// Leap Motion 入力安定化
 	// =========================================================================
@@ -427,6 +451,7 @@ private:
 	bool TryGetSelectedLeapHand(const struct FLeapFrameData& Frame, struct FLeapHandData& OutHand) const;
 	FVector2D ConvertLeapPositionToScreen(FVector LeapPosition) const;
 	float ReadLeapAxis(FVector LeapPosition, ELeapTowelAxis Axis) const;
+	void UpdateLeapTooCloseState(FVector LeapPosition, bool bHasSelectedHand);
 	FVector2D ApplyHandSmoothing(FVector2D RawPosition, float DeltaTime);
 	float ApplyOneEuroAxis(float Value, float DeltaTime, FOneEuroAxisState& AxisState) const;
 	float CalculateOneEuroAlpha(float Cutoff, float DeltaTime) const;

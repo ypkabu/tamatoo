@@ -725,13 +725,15 @@ void ATomatinaHUD::UpdateTowelPosition(FVector2D Pos)
 	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Towel->Slot);
 	if (!Slot) { return; }
 
-	// 正規化 → メイン画面ピクセル
-	const float MainX = Pos.X * MainWidth;
-	const float MainY = Pos.Y * MainHeight;
+	const FVector2D OverlaySize = DirtOverlayWidget->GetCachedGeometry().GetLocalSize();
+	const float AreaWidth = (OverlaySize.X > 1.f) ? OverlaySize.X : MainWidth;
+	const float AreaHeight = (OverlaySize.Y > 1.f) ? OverlaySize.Y : MainHeight;
 
-	// タオル画像の中心をその座標に合わせる
-	const FVector2D Size = Slot->GetSize();
-	Slot->SetPosition(FVector2D(MainX - Size.X * 0.5f, MainY - Size.Y * 0.5f));
+	// UMG側のAnchor設定に左右されるとLeap座標とタオル表示がずれるため、
+	// C++側で左上基準Anchor + 中央Alignmentに統一して、正規化座標をそのまま中心位置に使う。
+	Slot->SetAnchors(FAnchors(0.f, 0.f));
+	Slot->SetAlignment(FVector2D(0.5f, 0.5f));
+	Slot->SetPosition(FVector2D(Pos.X * AreaWidth, Pos.Y * AreaHeight));
 }
 
 // =============================================================================
@@ -1300,9 +1302,96 @@ void ATomatinaHUD::UpdateTowelStatus(float DurabilityPercent, bool bSwapping)
 		Bar->SetPercent(DurabilityPercent);
 	}
 
-	if (UTextBlock* Txt = Cast<UTextBlock>(
+	if (UImage* SwapMessageImage = Cast<UImage>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_SwapMessage"))))
+	{
+		SwapMessageImage->SetRenderOpacity(1.0f);
+		SwapMessageImage->SetVisibility(bSwapping ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+	else if (UTextBlock* Txt = Cast<UTextBlock>(
 			DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_SwapMessage"))))
 	{
+		Txt->SetText(FText::FromString(TEXT("タオル交換中...")));
+		Txt->SetRenderOpacity(1.0f);
 		Txt->SetVisibility(bSwapping ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+	else if (bSwapping && bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::UpdateTowelStatus: DirtOverlayWidget に IMG_SwapMessage / TXT_SwapMessage が見つかりません"));
+	}
+}
+
+void ATomatinaHUD::UpdateLeapDistanceWarning(bool bVisible)
+{
+	if (!DirtOverlayWidget) { return; }
+
+	UTextBlock* WarningText = Cast<UTextBlock>(
+		DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_LeapDistanceWarning")));
+	if (!WarningText)
+	{
+		WarningText = Cast<UTextBlock>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("TXT_LeapWarning")));
+	}
+
+	if (WarningText)
+	{
+		WarningText->SetText(FText::FromString(TEXT("手を離してね")));
+		WarningText->SetRenderOpacity(1.0f);
+		WarningText->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		return;
+	}
+
+	UImage* WarningImage = Cast<UImage>(
+		DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_LeapDistanceWarning")));
+	if (!WarningImage)
+	{
+		WarningImage = Cast<UImage>(
+			DirtOverlayWidget->GetWidgetFromName(TEXT("IMG_LeapWarning")));
+	}
+	if (WarningImage)
+	{
+		WarningImage->SetRenderOpacity(1.0f);
+		WarningImage->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		return;
+	}
+
+	if (!RuntimeLeapDistanceWarningText)
+	{
+		UCanvasPanel* RootCanvas = DirtOverlayWidget->WidgetTree
+			? Cast<UCanvasPanel>(DirtOverlayWidget->WidgetTree->RootWidget)
+			: nullptr;
+		if (RootCanvas)
+		{
+			RuntimeLeapDistanceWarningText = NewObject<UTextBlock>(DirtOverlayWidget);
+			RuntimeLeapDistanceWarningText->SetText(FText::FromString(TEXT("手を離してね")));
+			RuntimeLeapDistanceWarningText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+			RuntimeLeapDistanceWarningText->SetShadowColorAndOpacity(FLinearColor::Black);
+			RuntimeLeapDistanceWarningText->SetShadowOffset(FVector2D(2.0f, 2.0f));
+
+			FSlateFontInfo FontInfo = RuntimeLeapDistanceWarningText->GetFont();
+			FontInfo.Size = 48;
+			RuntimeLeapDistanceWarningText->SetFont(FontInfo);
+
+			UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(RuntimeLeapDistanceWarningText);
+			if (Slot)
+			{
+				Slot->SetAnchors(FAnchors(0.5f, 0.0f));
+				Slot->SetAlignment(FVector2D(0.5f, 0.0f));
+				Slot->SetPosition(FVector2D(0.0f, 120.0f));
+				Slot->SetSize(FVector2D(720.0f, 90.0f));
+			}
+		}
+	}
+
+	if (RuntimeLeapDistanceWarningText)
+	{
+		RuntimeLeapDistanceWarningText->SetRenderOpacity(1.0f);
+		RuntimeLeapDistanceWarningText->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+	else if (bVisible && bDebugHUDLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD::UpdateLeapDistanceWarning: 警告表示用Widgetを作成できませんでした"));
 	}
 }

@@ -85,6 +85,10 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 
 	APlayerController* PC  = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	ATomatinaHUD*       HUD = PC ? Cast<ATomatinaHUD>(PC->GetHUD()) : nullptr;
+	if (HUD)
+	{
+		HUD->UpdateLeapDistanceWarning(bEnableLeapTooCloseWarning && bLeapTooCloseToDevice);
+	}
 
 	const float NowSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 	bHasValidInput = false;
@@ -131,6 +135,45 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		}
 	}
 
+	// タオル交換は入力が無い間も進める。先に no-input return すると、
+	// 手を離した瞬間に交換タイマーと「交換中」UIが止まってしまう。
+	if (bIsSwapping)
+	{
+		bTowelVisible = false;
+		bTowelInZoomView = false;
+		UpdateWipeSound(false);
+
+		if (HUD && bTowelShownOnHUD)
+		{
+			HUD->HideTowel();
+			bTowelShownOnHUD = false;
+		}
+
+		if (!bHasValidInput)
+		{
+			ProcessedHandSpeed = 0.0f;
+			ResetHandInputFilter();
+		}
+
+		SwapTimer -= DeltaTime;
+		if (SwapTimer <= 0.f)
+		{
+			bIsSwapping       = false;
+			CurrentDurability = MaxDurability;
+			UE_LOG(LogTemp, Warning,
+				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
+
+			// 交換完了 SE
+			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelReadySound);
+		}
+
+		if (HUD)
+		{
+			HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
+		}
+		return;
+	}
+
 	if (!bHasValidInput)
 	{
 		bTowelVisible    = false;
@@ -145,6 +188,10 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		{
 			HUD->HideTowel();
 			bTowelShownOnHUD = false;
+		}
+		if (HUD)
+		{
+			HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
 		}
 		return;
 	}
@@ -161,27 +208,6 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 			HUD->ShowTowel();
 			bTowelShownOnHUD = true;
 		}
-	}
-
-	// タオル交換中
-	if (bIsSwapping)
-	{
-		bTowelInZoomView = false;
-		// 交換中は拭けないので音も止める
-		UpdateWipeSound(false);
-
-		SwapTimer -= DeltaTime;
-		if (SwapTimer <= 0.f)
-		{
-			bIsSwapping       = false;
-			CurrentDurability = MaxDurability;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
-
-			// 交換完了 SE
-			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelReadySound);
-		}
-		return;
 	}
 
 	// 拭き取り処理
@@ -239,6 +265,11 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		}
 	}
 
+	if (HUD)
+	{
+		HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
+	}
+
 	// ズーム映像へのタオル映り込み判定
 	bTowelInZoomView = CheckTowelInView(ClampedHandScreenPosition);
 }
@@ -259,6 +290,7 @@ void ATomatinaTowelSystem::PollLeapInputFromCpp(float DeltaTime)
 	if (!bReadLeapInputInCpp)
 	{
 		SetLeapInputStatus(TEXT("C++ Leap input disabled"));
+		UpdateLeapTooCloseState(FVector::ZeroVector, false);
 		return;
 	}
 
@@ -266,6 +298,7 @@ void ATomatinaTowelSystem::PollLeapInputFromCpp(float DeltaTime)
 	{
 		SetLeapInputStatus(TEXT("LeapComponent is null"));
 		UpdateHandData(false, RawHandScreenPosition, 0.0f);
+		UpdateLeapTooCloseState(FVector::ZeroVector, false);
 		bHasLastCppLeapScreenPosition = false;
 		bLastCppLeapHadSelectedHand = false;
 		return;
@@ -310,6 +343,7 @@ void ATomatinaTowelSystem::PollLeapInputFromCpp(float DeltaTime)
 			SetLeapInputStatus(TEXT("Leap frame has no hands"));
 		}
 		UpdateHandData(false, RawHandScreenPosition, 0.0f);
+		UpdateLeapTooCloseState(FVector::ZeroVector, false);
 		bHasLastCppLeapScreenPosition = false;
 		bLastCppLeapHadSelectedHand = false;
 		return;
@@ -323,6 +357,7 @@ void ATomatinaTowelSystem::PollLeapInputFromCpp(float DeltaTime)
 		? SelectedHand.Palm.StabilizedPosition
 		: SelectedHand.Palm.Position;
 	LastSelectedLeapPalmPosition = PalmPosition;
+	UpdateLeapTooCloseState(PalmPosition, true);
 	const FVector2D ScreenPosition = ConvertLeapPositionToScreen(PalmPosition);
 
 	float Speed = 0.0f;
@@ -416,6 +451,30 @@ float ATomatinaTowelSystem::ReadLeapAxis(FVector LeapPosition, ELeapTowelAxis Ax
 		return -LeapPosition.Z;
 	default:
 		return LeapPosition.Y;
+	}
+}
+
+void ATomatinaTowelSystem::UpdateLeapTooCloseState(FVector LeapPosition, bool bHasSelectedHand)
+{
+	if (!bEnableLeapTooCloseWarning || !bHasSelectedHand)
+	{
+		bLeapTooCloseToDevice = false;
+		LastLeapDistanceValue = 0.0f;
+		return;
+	}
+
+	LastLeapDistanceValue = ReadLeapAxis(LeapPosition, LeapTooCloseAxis);
+	const float ShowThreshold = LeapTooCloseThreshold;
+	const float ClearThreshold = FMath::Max(LeapTooCloseClearThreshold, ShowThreshold);
+
+	// ヒステリシスを持たせ、閾値付近で警告が点滅しないようにする。
+	if (bLeapTooCloseToDevice)
+	{
+		bLeapTooCloseToDevice = LastLeapDistanceValue <= ClearThreshold;
+	}
+	else
+	{
+		bLeapTooCloseToDevice = LastLeapDistanceValue <= ShowThreshold;
 	}
 }
 
