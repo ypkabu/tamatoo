@@ -183,165 +183,198 @@ void ATomatinaGameMode::Tick(float DeltaSeconds)
 
 	const float RealDelta = FApp::GetDeltaTime();
 
-	// ── ロード中 ───────────────────────────────────────
-	// 「ロード中...」表示。LoadingHoldSeconds 経過 + 必要アクター揃いで
-	// カウントダウンへ遷移する。
-	if (bIsLoading)
-	{
-		LoadingElapsed += RealDelta;
-
-		if (IsLoadingComplete())
-		{
-			BeginCountdownAfterLoading();
-		}
-		return;
-	}
-
-	// ── カウントダウン中 ───────────────────────────────
-	if (bInCountdown)
-	{
-		CountdownRemaining -= RealDelta;
-
-		const int32 NewSecond = FMath::CeilToInt(CountdownRemaining);
-		if (NewSecond != LastCountdownSecond && NewSecond > 0)
-		{
-			LastCountdownSecond = NewSecond;
-			if (ATomatinaHUD* HUD = GetTomatinaHUD())
-			{
-				HUD->ShowCountdown(NewSecond);
-			}
-			// カウントダウン各秒の SE
-			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownTickSound);
-		}
-
-		if (CountdownRemaining <= 0.f)
-		{
-			bInCountdown = false;
-			UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
-
-			if (ATomatinaHUD* HUD = GetTomatinaHUD())
-			{
-				HUD->HideCountdown();
-				// ゲーム全体タイマーの初期表示
-				HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
-			}
-			// スタートの合図 SE
-			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownGoSound);
-			StartMission(0);
-		}
-		return;
-	}
-
-	// ── ゲーム全体の制限時間カウントダウン ─────────────
-	// カウントダウン中・リザルト表示中以外（TimeDilation=1 の時）にだけ減る
-	if (!bIsShowingResult && !bIsShowingMissionResult && !bIsBuildingUpFinalResult
-		&& GameTimeRemaining > 0.f)
-	{
-		GameTimeRemaining -= DeltaSeconds; // TimeDilation 準拠なのでポーズ中は進まない
-		if (GameTimeRemaining < 0.f) { GameTimeRemaining = 0.f; }
-
-		if (ATomatinaHUD* HUD = GetTomatinaHUD())
-		{
-			HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
-		}
-
-		if (GameTimeRemaining <= 0.f)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaGameMode: ゲーム全体の制限時間に到達 → 最終リザルトへ"));
-			BeginFinalResultBuildup();
-			return;
-		}
-	}
-
-	// ── 撮影リザルト表示中（TimeDilation=0 なので FApp で計測） ──
-	if (bIsShowingResult)
-	{
-		ResultElapsed += RealDelta;
-		if (ResultElapsed >= ResultDisplayTime)
-		{
-			ResultElapsed    = 0.f;
-			bIsShowingResult = false;
-
-			UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
-			if (ATomatinaHUD* HUD = GetTomatinaHUD())
-			{
-				HUD->HideResult();
-			}
-
-			if (bLastPhotoSucceeded)
-			{
-				// 成功 → 次ミッションへ
-				StartMission(CurrentMissionIndex + 1);
-			}
-			// 失敗時は同ミッション継続（ターゲットは生きたまま、残り時間も継続）
-		}
-		return;
-	}
-
-	// ── ミッション結果（時間切れ）表示中 ─────────────────
-	if (bIsShowingMissionResult)
-	{
-		MissionResultElapsed += RealDelta;
-		if (MissionResultElapsed >= MissionResultDisplayTime)
-		{
-			MissionResultElapsed    = 0.f;
-			bIsShowingMissionResult = false;
-
-			if (ATomatinaHUD* HUD = GetTomatinaHUD())
-			{
-				HUD->HideMissionResult();
-			}
-
-			StartMission(CurrentMissionIndex + 1);
-		}
-		return;
-	}
-
-	// ── 最終リザルト前の溜め（BGM のみ残して静止中） ─────
-	if (bIsBuildingUpFinalResult)
-	{
-		FinalBuildupElapsed += RealDelta;
-		if (FinalBuildupElapsed >= FinalResultBuildupTime)
-		{
-			FinalBuildupElapsed       = 0.f;
-			bIsBuildingUpFinalResult  = false;
-			ShowFinalResult();
-		}
-		return;
-	}
+	if (TickLoading(RealDelta)) { return; }
+	if (TickCountdown(RealDelta)) { return; }
+	if (TickGameTime(DeltaSeconds)) { return; }
+	if (TickPhotoResult(RealDelta)) { return; }
+	if (TickMissionResult(RealDelta)) { return; }
+	if (TickFinalResultBuildup(RealDelta)) { return; }
 
 	// ── ミッション残り時間 ──────────────────────────────
 	UpdateStylishGauge(RealDelta);
+	TickMissionTimer(DeltaSeconds);
+}
 
-	if (RemainingTime > 0.f)
+bool ATomatinaGameMode::TickLoading(float RealDelta)
+{
+	if (!bIsLoading)
 	{
-		RemainingTime -= DeltaSeconds; // 通常再生中なので DeltaSeconds で OK
+		return false;
+	}
+
+	LoadingElapsed += RealDelta;
+	if (IsLoadingComplete())
+	{
+		BeginCountdownAfterLoading();
+	}
+
+	return true;
+}
+
+bool ATomatinaGameMode::TickCountdown(float RealDelta)
+{
+	if (!bInCountdown)
+	{
+		return false;
+	}
+
+	CountdownRemaining -= RealDelta;
+
+	const int32 NewSecond = FMath::CeilToInt(CountdownRemaining);
+	if (NewSecond != LastCountdownSecond && NewSecond > 0)
+	{
+		LastCountdownSecond = NewSecond;
+		if (ATomatinaHUD* HUD = GetTomatinaHUD())
+		{
+			HUD->ShowCountdown(NewSecond);
+		}
+		UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownTickSound);
+	}
+
+	if (CountdownRemaining <= 0.f)
+	{
+		bInCountdown = false;
+		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
 
 		if (ATomatinaHUD* HUD = GetTomatinaHUD())
 		{
-			HUD->UpdateTimer(FMath::Max(0.f, RemainingTime));
+			HUD->HideCountdown();
+			HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
+		}
+		UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, CountdownGoSound);
+		StartMission(0);
+	}
+
+	return true;
+}
+
+bool ATomatinaGameMode::TickGameTime(float DeltaSeconds)
+{
+	if (bIsShowingResult || bIsShowingMissionResult || bIsBuildingUpFinalResult || GameTimeRemaining <= 0.f)
+	{
+		return false;
+	}
+
+	GameTimeRemaining -= DeltaSeconds;
+	if (GameTimeRemaining < 0.f) { GameTimeRemaining = 0.f; }
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->UpdateGameTimer(GameTimeRemaining, GameTimeTotal);
+	}
+
+	if (GameTimeRemaining > 0.f)
+	{
+		return false;
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ATomatinaGameMode: ゲーム全体の制限時間に到達 → 最終リザルトへ"));
+	BeginFinalResultBuildup();
+	return true;
+}
+
+bool ATomatinaGameMode::TickPhotoResult(float RealDelta)
+{
+	if (!bIsShowingResult)
+	{
+		return false;
+	}
+
+	ResultElapsed += RealDelta;
+	if (ResultElapsed >= ResultDisplayTime)
+	{
+		ResultElapsed    = 0.f;
+		bIsShowingResult = false;
+
+		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.0f);
+		if (ATomatinaHUD* HUD = GetTomatinaHUD())
+		{
+			HUD->HideResult();
 		}
 
-		if (RemainingTime <= 0.f)
+		if (bLastPhotoSucceeded)
 		{
-			RemainingTime = -1.f;
-
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode: 時間切れ Mission=%d"),
-				CurrentMissionIndex);
-
-			if (ATomatinaHUD* HUD = GetTomatinaHUD())
-			{
-				HUD->ShowMissionResult(0, TEXT("時間切れ！"));
-			}
-
-			// 時間切れ SE
-			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TimeUpSound);
-
-			bIsShowingMissionResult = true;
-			MissionResultElapsed    = 0.f;
+			StartMission(CurrentMissionIndex + 1);
 		}
 	}
+
+	return true;
+}
+
+bool ATomatinaGameMode::TickMissionResult(float RealDelta)
+{
+	if (!bIsShowingMissionResult)
+	{
+		return false;
+	}
+
+	MissionResultElapsed += RealDelta;
+	if (MissionResultElapsed >= MissionResultDisplayTime)
+	{
+		MissionResultElapsed    = 0.f;
+		bIsShowingMissionResult = false;
+
+		if (ATomatinaHUD* HUD = GetTomatinaHUD())
+		{
+			HUD->HideMissionResult();
+		}
+
+		StartMission(CurrentMissionIndex + 1);
+	}
+
+	return true;
+}
+
+bool ATomatinaGameMode::TickFinalResultBuildup(float RealDelta)
+{
+	if (!bIsBuildingUpFinalResult)
+	{
+		return false;
+	}
+
+	FinalBuildupElapsed += RealDelta;
+	if (FinalBuildupElapsed >= FinalResultBuildupTime)
+	{
+		FinalBuildupElapsed       = 0.f;
+		bIsBuildingUpFinalResult  = false;
+		ShowFinalResult();
+	}
+
+	return true;
+}
+
+void ATomatinaGameMode::TickMissionTimer(float DeltaSeconds)
+{
+	if (RemainingTime <= 0.f)
+	{
+		return;
+	}
+
+	RemainingTime -= DeltaSeconds;
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->UpdateTimer(FMath::Max(0.f, RemainingTime));
+	}
+
+	if (RemainingTime > 0.f)
+	{
+		return;
+	}
+
+	RemainingTime = -1.f;
+	UE_LOG(LogTemp, Warning, TEXT("ATomatinaGameMode: 時間切れ Mission=%d"), CurrentMissionIndex);
+
+	if (ATomatinaHUD* HUD = GetTomatinaHUD())
+	{
+		HUD->ShowMissionResult(0, TEXT("時間切れ！"));
+	}
+
+	UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TimeUpSound);
+
+	bIsShowingMissionResult = true;
+	MissionResultElapsed    = 0.f;
 }
 
 // =============================================================================

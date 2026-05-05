@@ -186,119 +186,168 @@ void ATomatinaPlayerPawn::Tick(float DeltaTime)
 
 	if (!PC || !SceneCapture_Zoom) { return; }
 
-	if (!bTestMode && !bWindowLayoutVerified)
-	{
-		WindowLayoutRetryElapsed += DeltaTime;
-		if (WindowLayoutRetryElapsed >= 0.5f && WindowLayoutRetryCount < 6)
-		{
-			WindowLayoutRetryElapsed = 0.f;
-			EnsureDualScreenWindowLayout();
-		}
-	}
+	UpdateDualScreenLayoutRetry(DeltaTime);
 
 	// ── ZoomAlpha の補間（実時間ベース） ───────────────────────────────
 	const float RealDelta = FApp::GetDeltaTime();
-	const float Target    = bIsZooming ? 1.f : 0.f;
-	ZoomAlpha = FMath::FInterpTo(ZoomAlpha, Target, RealDelta, ZoomSpeed);
-
-	// ── FOV と相対位置を ZoomAlpha で更新 ─────────────────────────────
-	const float CurrentFOV = FMath::Lerp(DefaultFOV, ZoomFOV, ZoomAlpha);
-	SceneCapture_Zoom->FOVAngle = CurrentFOV;
-
-	const FVector CurrentOffset = FMath::Lerp(FVector::ZeroVector, TargetOffset, ZoomAlpha);
-	SceneCapture_Zoom->SetRelativeLocation(CurrentOffset);
+	UpdateZoomInterpolation(RealDelta);
 
 	ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD());
 
 	// ── ZoomAlpha >= 0.95：カーソルを iPhone 中央に一度だけ飛ばす ──────
 	// 旧スパンウィンドウ方式のときのみ。第二ウィンドウ方式ではスマホ側は独立 SWindow
 	// なので OS カーソルを動かす必要がなく、IMG_PhoneCursor(UMG) で視覚的に示す。
-	if (bIsZooming && ZoomAlpha >= 0.95f && !bCursorCentered)
-	{
-		bCursorCentered = true;
-		if (!bUseSeparatePhoneWindow)
-		{
-			const FVector2D Center =
-				UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
-			PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
-			if (bDebugPlayerLog)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
-					Center.X, Center.Y);
-			}
-		}
-	}
+	CenterLegacySpanCursorWhenZoomReady();
 
 	// ── ZoomAlpha >= 0.99：マウスルック有効化（カーソルは常時表示のまま） ──
-	if (bIsZooming && ZoomAlpha >= 0.99f && !bZoomComplete)
-	{
-		bZoomComplete = true;
-		PC->bShowMouseCursor = true;
-		PC->SetInputMode(FInputModeGameOnly());
-		if (bDebugPlayerLog)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効・カーソル表示継続）"));
-		}
-	}
+	EnableZoomLookWhenReady();
 
 	// ── ズーム中：マウスルックを SceneCapture_Zoom のローカル回転に適用 ──
-	if (bZoomComplete && !CurrentLookInput.IsNearlyZero())
-	{
-		FRotator Rel = SceneCapture_Zoom->GetRelativeRotation();
-
-		// 感度 = MoveSpeed * ZoomLookSensitivity（両方 BP でチューニング可）
-		const float Delta = MoveSpeed * ZoomLookSensitivity * RealDelta * 0.01f;
-
-		Rel.Yaw   += CurrentLookInput.X * Delta;
-		Rel.Pitch -= CurrentLookInput.Y * Delta;
-
-		// Pitch 上限（デフォルト ±89 度 = ほぼ真上／真下まで）
-		Rel.Pitch = FMath::ClampAngle(Rel.Pitch, -ZoomPitchLimit, ZoomPitchLimit);
-
-		// Yaw は 0 以下なら制限なし、正の値で ± 制限
-		if (ZoomYawLimit > 0.f)
-		{
-			Rel.Yaw = FMath::ClampAngle(Rel.Yaw, -ZoomYawLimit, ZoomYawLimit);
-		}
-
-		SceneCapture_Zoom->SetRelativeRotation(Rel);
-	}
+	ApplyZoomLookInput(RealDelta);
 	CurrentLookInput = FVector2D::ZeroVector;
 
 	// ── ズーム中：HUD にカーソル位置を通知（iPhone 側に表示） ────────
-	if (bIsZooming && HUD)
-	{
-		const FVector2D MainPos = UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
-			PC, SceneCapture_Zoom, MainWidth, MainHeight);
-		HUD->UpdateCursorPosition(MainPos);
-	}
+	UpdateZoomHUDCursor(HUD);
 
 	// ── ズーム解除が完了したらリセット ─────────────────────────────
-	if (!bIsZooming && ZoomAlpha < 0.01f)
-	{
-		ZoomAlpha = 0.f;
-		SceneCapture_Zoom->SetRelativeLocation(FVector::ZeroVector);
-		SceneCapture_Zoom->SetRelativeRotation(FRotator::ZeroRotator);
-	}
+	ResetZoomViewWhenIdle();
 
 	// ── 非ズーム時：カーソルをメインモニター内に閉じ込める ────────────
 	// ウィンドウは Main + iPhone の横並びなので、右側 iPhone 領域に抜けていた
 	// カーソルを戻す。ズーム中はカーソル非表示 or iPhone 側に飛ばしてるので対象外。
-	if (!bIsZooming && PC->bShowMouseCursor)
-	{
-		float MX = 0.f, MY = 0.f;
-		if (PC->GetMousePosition(MX, MY))
-		{
-			const float ClampedX = FMath::Clamp(MX, 0.f, MainWidth  - 1.f);
-			const float ClampedY = FMath::Clamp(MY, 0.f, MainHeight - 1.f);
-			if (!FMath::IsNearlyEqual(ClampedX, MX) || !FMath::IsNearlyEqual(ClampedY, MY))
-			{
-				PC->SetMouseLocation(static_cast<int32>(ClampedX), static_cast<int32>(ClampedY));
-			}
-		}
-	}
+	ClampMouseCursorToMainScreen();
 
 	UpdatePhoneSceneCapture(RealDelta);
+}
+
+void ATomatinaPlayerPawn::UpdateDualScreenLayoutRetry(float DeltaTime)
+{
+	if (bTestMode || bWindowLayoutVerified)
+	{
+		return;
+	}
+
+	WindowLayoutRetryElapsed += DeltaTime;
+	if (WindowLayoutRetryElapsed >= 0.5f && WindowLayoutRetryCount < 6)
+	{
+		WindowLayoutRetryElapsed = 0.f;
+		EnsureDualScreenWindowLayout();
+	}
+}
+
+void ATomatinaPlayerPawn::UpdateZoomInterpolation(float RealDelta)
+{
+	const float Target = bIsZooming ? 1.f : 0.f;
+	ZoomAlpha = FMath::FInterpTo(ZoomAlpha, Target, RealDelta, ZoomSpeed);
+
+	SceneCapture_Zoom->FOVAngle = FMath::Lerp(DefaultFOV, ZoomFOV, ZoomAlpha);
+	SceneCapture_Zoom->SetRelativeLocation(FMath::Lerp(FVector::ZeroVector, TargetOffset, ZoomAlpha));
+}
+
+void ATomatinaPlayerPawn::CenterLegacySpanCursorWhenZoomReady()
+{
+	if (!bIsZooming || ZoomAlpha < 0.95f || bCursorCentered)
+	{
+		return;
+	}
+
+	bCursorCentered = true;
+	if (bUseSeparatePhoneWindow)
+	{
+		return;
+	}
+
+	const FVector2D Center = UTomatinaFunctionLibrary::GetZoomScreenCenter(MainWidth, PhoneWidth, PhoneHeight);
+	PC->SetMouseLocation(static_cast<int32>(Center.X), static_cast<int32>(Center.Y));
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: カーソルを iPhone 中央(%.0f,%.0f)へ移動"),
+			Center.X, Center.Y);
+	}
+}
+
+void ATomatinaPlayerPawn::EnableZoomLookWhenReady()
+{
+	if (!bIsZooming || ZoomAlpha < 0.99f || bZoomComplete)
+	{
+		return;
+	}
+
+	bZoomComplete = true;
+	PC->bShowMouseCursor = true;
+	PC->SetInputMode(FInputModeGameOnly());
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ATomatinaPlayerPawn::Tick: ズーム完了（マウスルック有効・カーソル表示継続）"));
+	}
+}
+
+void ATomatinaPlayerPawn::ApplyZoomLookInput(float RealDelta)
+{
+	if (!bZoomComplete || CurrentLookInput.IsNearlyZero())
+	{
+		return;
+	}
+
+	FRotator Rel = SceneCapture_Zoom->GetRelativeRotation();
+
+	const float Delta = MoveSpeed * ZoomLookSensitivity * RealDelta * 0.01f;
+	Rel.Yaw   += CurrentLookInput.X * Delta;
+	Rel.Pitch -= CurrentLookInput.Y * Delta;
+
+	Rel.Pitch = FMath::ClampAngle(Rel.Pitch, -ZoomPitchLimit, ZoomPitchLimit);
+	if (ZoomYawLimit > 0.f)
+	{
+		Rel.Yaw = FMath::ClampAngle(Rel.Yaw, -ZoomYawLimit, ZoomYawLimit);
+	}
+
+	SceneCapture_Zoom->SetRelativeRotation(Rel);
+}
+
+void ATomatinaPlayerPawn::UpdateZoomHUDCursor(ATomatinaHUD* HUD)
+{
+	if (!bIsZooming || !HUD)
+	{
+		return;
+	}
+
+	const FVector2D MainPos = UTomatinaFunctionLibrary::ProjectZoomToMainScreen(
+		PC, SceneCapture_Zoom, MainWidth, MainHeight);
+	HUD->UpdateCursorPosition(MainPos);
+}
+
+void ATomatinaPlayerPawn::ResetZoomViewWhenIdle()
+{
+	if (bIsZooming || ZoomAlpha >= 0.01f)
+	{
+		return;
+	}
+
+	ZoomAlpha = 0.f;
+	SceneCapture_Zoom->SetRelativeLocation(FVector::ZeroVector);
+	SceneCapture_Zoom->SetRelativeRotation(FRotator::ZeroRotator);
+}
+
+void ATomatinaPlayerPawn::ClampMouseCursorToMainScreen()
+{
+	if (bIsZooming || !PC->bShowMouseCursor)
+	{
+		return;
+	}
+
+	float MX = 0.f;
+	float MY = 0.f;
+	if (!PC->GetMousePosition(MX, MY))
+	{
+		return;
+	}
+
+	const float ClampedX = FMath::Clamp(MX, 0.f, MainWidth  - 1.f);
+	const float ClampedY = FMath::Clamp(MY, 0.f, MainHeight - 1.f);
+	if (!FMath::IsNearlyEqual(ClampedX, MX) || !FMath::IsNearlyEqual(ClampedY, MY))
+	{
+		PC->SetMouseLocation(static_cast<int32>(ClampedX), static_cast<int32>(ClampedY));
+	}
 }
 
 // =============================================================================
@@ -354,54 +403,11 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 
 	// ── 壁/床めり込み防止: カメラ位置→オフセット先をスイープして安全距離にクランプ ──
 	// TargetOffset はカメラローカル座標なのでワールドに変換してからスイープする。
-	if (GetWorld() && !TargetOffset.IsNearlyZero())
-	{
-		const FTransform CamXf = PlayerCamera->GetComponentTransform();
-		const FVector StartLoc = CamXf.GetLocation();
-		const FVector WorldOffset = CamXf.TransformVectorNoScale(TargetOffset);
-		const FVector EndLoc = StartLoc + WorldOffset;
-
-		FCollisionQueryParams SweepParams(TEXT("ZoomOffsetSweep"), false, this);
-		SweepParams.AddIgnoredActor(this);
-
-		FHitResult SweepHit;
-		const bool bBlocked = GetWorld()->SweepSingleByChannel(
-			SweepHit, StartLoc, EndLoc, FQuat::Identity,
-			ECC_Visibility,
-			FCollisionShape::MakeSphere(FMath::Max(1.f, ZoomOffsetSweepRadius)),
-			SweepParams);
-
-		if (bBlocked)
-		{
-			const float FullDist = WorldOffset.Size();
-			const float HitDist  = (SweepHit.Location - StartLoc).Size();
-			const float SafeDist = FMath::Max(0.f, HitDist - ZoomOffsetSafetyMargin);
-
-			if (FullDist > KINDA_SMALL_NUMBER)
-			{
-				const float Scale = FMath::Clamp(SafeDist / FullDist, 0.f, 1.f);
-				TargetOffset *= Scale;
-				if (bDebugPlayerLog)
-				{
-					UE_LOG(LogTemp, Warning,
-						TEXT("OnRightMousePressed: 壁検出 FullDist=%.1f HitDist=%.1f SafeDist=%.1f -> Scale=%.2f"),
-						FullDist, HitDist, SafeDist, Scale);
-				}
-			}
-			else
-			{
-				TargetOffset = FVector::ZeroVector;
-			}
-		}
-	}
+	ClampZoomTargetOffsetAgainstWorld();
 
 	// 近接クリップを広めに設定しておく。スイープで防ぎきれないケース (回転でめり込む等)
 	// でも壁の内側面が描画されず、ズームビューが黒く潰れない。
-	if (SceneCapture_Zoom && ZoomNearClippingPlane > 0.f)
-	{
-		SceneCapture_Zoom->CustomNearClippingPlane = ZoomNearClippingPlane;
-		SceneCapture_Zoom->bOverride_CustomNearClippingPlane = true;
-	}
+	ApplyZoomNearClipGuard();
 
 	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
 
@@ -421,6 +427,62 @@ void ATomatinaPlayerPawn::OnRightMousePressed(const FInputActionValue& /*Value*/
 	{
 		UE_LOG(LogTemp, Warning, TEXT("OnRightMousePressed: ズーム開始 Offset=(%.1f,%.1f,%.1f)"),
 			TargetOffset.X, TargetOffset.Y, TargetOffset.Z);
+	}
+}
+
+void ATomatinaPlayerPawn::ClampZoomTargetOffsetAgainstWorld()
+{
+	if (!GetWorld() || TargetOffset.IsNearlyZero())
+	{
+		return;
+	}
+
+	const FTransform CamXf = PlayerCamera->GetComponentTransform();
+	const FVector StartLoc = CamXf.GetLocation();
+	const FVector WorldOffset = CamXf.TransformVectorNoScale(TargetOffset);
+	const FVector EndLoc = StartLoc + WorldOffset;
+
+	FCollisionQueryParams SweepParams(TEXT("ZoomOffsetSweep"), false, this);
+	SweepParams.AddIgnoredActor(this);
+
+	FHitResult SweepHit;
+	const bool bBlocked = GetWorld()->SweepSingleByChannel(
+		SweepHit, StartLoc, EndLoc, FQuat::Identity,
+		ECC_Visibility,
+		FCollisionShape::MakeSphere(FMath::Max(1.f, ZoomOffsetSweepRadius)),
+		SweepParams);
+
+	if (!bBlocked)
+	{
+		return;
+	}
+
+	const float FullDist = WorldOffset.Size();
+	if (FullDist <= KINDA_SMALL_NUMBER)
+	{
+		TargetOffset = FVector::ZeroVector;
+		return;
+	}
+
+	const float HitDist  = (SweepHit.Location - StartLoc).Size();
+	const float SafeDist = FMath::Max(0.f, HitDist - ZoomOffsetSafetyMargin);
+	const float Scale = FMath::Clamp(SafeDist / FullDist, 0.f, 1.f);
+	TargetOffset *= Scale;
+
+	if (bDebugPlayerLog)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("OnRightMousePressed: 壁検出 FullDist=%.1f HitDist=%.1f SafeDist=%.1f -> Scale=%.2f"),
+			FullDist, HitDist, SafeDist, Scale);
+	}
+}
+
+void ATomatinaPlayerPawn::ApplyZoomNearClipGuard()
+{
+	if (SceneCapture_Zoom && ZoomNearClippingPlane > 0.f)
+	{
+		SceneCapture_Zoom->CustomNearClippingPlane = ZoomNearClippingPlane;
+		SceneCapture_Zoom->bOverride_CustomNearClippingPlane = true;
 	}
 }
 
@@ -445,18 +507,7 @@ void ATomatinaPlayerPawn::OnRightMouseReleased(const FInputActionValue& /*Value*
 	bCursorCentered = false;
 	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
 
-	if (PC)
-	{
-		PC->bShowMouseCursor = true;
-		FInputModeGameAndUI InputMode;
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
-
-		if (ATomatinaHUD* HUD = Cast<ATomatinaHUD>(PC->GetHUD()))
-		{
-			HUD->HideCursor();
-		}
-	}
+	EndZoomInteraction();
 }
 
 // =============================================================================
@@ -491,6 +542,11 @@ void ATomatinaPlayerPawn::OnLeftMousePressed(const FInputActionValue& /*Value*/)
 	bCursorCentered = false;
 	RequestPhoneCaptureBurst(ZoomTransitionCaptureSeconds);
 
+	EndZoomInteraction();
+}
+
+void ATomatinaPlayerPawn::EndZoomInteraction()
+{
 	if (PC)
 	{
 		PC->bShowMouseCursor = true;

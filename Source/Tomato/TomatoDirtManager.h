@@ -222,6 +222,13 @@ private:
 	/** SpawnDirt までの残り時間 */
 	float SpawnTimer = 0.0f;
 
+	float ClampDirtSize(float Size) const;
+	FVector2D ClampDirtSpawnPosition(FVector2D NormPos) const;
+	int32 ResolveDirtTextureIndex(EDirtType DirtType, int32 InTextureIndex) const;
+	bool WipeNormalDirt(FDirtSplat& Dirt, float Distance, float EffectRange, float Amount) const;
+	bool WipeStickyDirt(FDirtSplat& Dirt, FVector2D NormPos, float Amount, float NowRealTime) const;
+	bool ResetStickyDashIfExpired(FDirtSplat& Dirt, float NowRealTime) const;
+
 	/** HUD に汚れ更新を通知する内部ヘルパー */
 	void NotifyHUD();
 };

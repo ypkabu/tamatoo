@@ -202,39 +202,19 @@ void ATomatinaHUD::CreatePhoneWindow()
 
 	// WBP 側で Fill アンカーが付いていないと Image のスロットサイズが 0 のまま
 	// になり RT を貼っても見えない。C++ から強制的に親 CanvasPanel 全面塗りにする。
-	if (UImage* ZoomImg = Cast<UImage>(
-			PhoneViewWidget->GetWidgetFromName(TEXT("IMG_ZoomView"))))
+	if (UImage* ZoomImg = Cast<UImage>(PhoneViewWidget->GetWidgetFromName(TEXT("IMG_ZoomView"))))
 	{
-		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(ZoomImg->Slot))
-		{
-			Slot->SetAutoSize(false);
-			Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-			Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
-			Slot->SetAlignment(FVector2D(0.f, 0.f));
-			if (bDebugHUDLog)
-			{
-				UE_LOG(LogTemp, Warning,
-					TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView を全面塗りに強制"));
-			}
-		}
-		else
+		if (ForceWidgetToFillParentCanvas(ZoomImg, TEXT("PhoneView IMG_ZoomView")) && bDebugHUDLog)
 		{
 			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView 親が CanvasPanel でない (親を CanvasPanel にしてください)"));
+				TEXT("ATomatinaHUD: PhoneView の IMG_ZoomView を全面塗りに強制"));
 		}
 	}
 
 	// PhoneSplatContainer も同様に親全面で覆う (ここに汚れが動的生成される)
-	if (UCanvasPanel* SplatC = Cast<UCanvasPanel>(
-			PhoneViewWidget->GetWidgetFromName(TEXT("PhoneSplatContainer"))))
+	if (UCanvasPanel* SplatC = Cast<UCanvasPanel>(PhoneViewWidget->GetWidgetFromName(TEXT("PhoneSplatContainer"))))
 	{
-		if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(SplatC->Slot))
-		{
-			Slot->SetAutoSize(false);
-			Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-			Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
-			Slot->SetAlignment(FVector2D(0.f, 0.f));
-		}
+		ForceWidgetToFillParentCanvas(SplatC, TEXT("PhoneSplatContainer"));
 	}
 
 	const FVector2D ScreenPos = bOverridePhoneWindowPosition
@@ -430,13 +410,10 @@ UImage* ATomatinaHUD::FindOrCreateZoomImage(UUserWidget* Widget, FName Preferred
 		return nullptr;
 	}
 
-	if (UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(RuntimeZoomImage))
+	if (RootCanvas->AddChildToCanvas(RuntimeZoomImage))
 	{
 		// 親 CanvasPanel 全面に塗る (Anchor 0,0〜1,1 / Offset 全0)
-		Slot->SetAutoSize(false);
-		Slot->SetAlignment(FVector2D(0.f, 0.f));
-		Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-		Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+		ForceWidgetToFillParentCanvas(RuntimeZoomImage, TEXT("IMG_ZoomView_Runtime"));
 	}
 
 	if (bDebugHUDLog)
@@ -537,6 +514,29 @@ bool ATomatinaHUD::ConfigureZoomImageContent(UImage* ImageWidget, const TCHAR* W
 		TEXT("ATomatinaHUD: %s の ZoomView に RT/Material のどちらも設定できません"),
 		WidgetLabel);
 	return false;
+}
+
+bool ATomatinaHUD::ForceWidgetToFillParentCanvas(UWidget* Widget, const TCHAR* WidgetLabel)
+{
+	if (!Widget)
+	{
+		return false;
+	}
+
+	UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Widget->Slot);
+	if (!Slot)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaHUD: %s の親が CanvasPanel ではありません"),
+			WidgetLabel);
+		return false;
+	}
+
+	Slot->SetAutoSize(false);
+	Slot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+	Slot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+	Slot->SetAlignment(FVector2D(0.f, 0.f));
+	return true;
 }
 
 // =============================================================================

@@ -11,6 +11,7 @@ class UUserWidget;
 class UTexture2D;
 class UMaterialInterface;
 class UTextBlock;
+class UWidget;
 class SWindow;
 
 /**
@@ -349,6 +350,9 @@ private:
 
 	/** ZoomView 用 Image に RT_Zoom（またはマテリアル）を設定する */
 	bool ConfigureZoomImageContent(class UImage* ImageWidget, const TCHAR* WidgetLabel);
+
+	/** CanvasPanelSlot を持つ Widget を親 Canvas 全面に広げる */
+	bool ForceWidgetToFillParentCanvas(UWidget* Widget, const TCHAR* WidgetLabel);
 
 	/** 第二 SWindow を生成しスマホ側 UI (PhoneViewWidget) をアタッチ */
 	void CreatePhoneWindow();

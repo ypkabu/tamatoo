@@ -73,6 +73,62 @@ void ATomatinaTowelSystem::UpdateHandData(bool bDetected, FVector2D ScreenPositi
 	}
 }
 
+float ATomatinaTowelSystem::GetDurabilityPercent() const
+{
+	return MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f;
+}
+
+void ATomatinaTowelSystem::UpdateTowelHUDStatus(ATomatinaHUD* HUD) const
+{
+	if (HUD)
+	{
+		HUD->UpdateTowelStatus(GetDurabilityPercent(), bIsSwapping);
+	}
+}
+
+void ATomatinaTowelSystem::HideTowelVisual(ATomatinaHUD* HUD)
+{
+	if (HUD && bTowelShownOnHUD)
+	{
+		HUD->HideTowel();
+		bTowelShownOnHUD = false;
+	}
+}
+
+bool ATomatinaTowelSystem::TickTowelSwap(float DeltaTime, ATomatinaHUD* HUD)
+{
+	if (!bIsSwapping)
+	{
+		return false;
+	}
+
+	bTowelVisible = false;
+	bTowelInZoomView = false;
+	UpdateWipeSound(false);
+	HideTowelVisual(HUD);
+
+	if (!bHasValidInput)
+	{
+		ProcessedHandSpeed = 0.0f;
+		ResetHandInputFilter();
+	}
+
+	SwapTimer -= DeltaTime;
+	if (SwapTimer <= 0.f)
+	{
+		bIsSwapping       = false;
+		CurrentDurability = MaxDurability;
+		UE_LOG(LogTemp, Warning,
+			TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
+
+		// 交換完了 SE
+		UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelReadySound);
+	}
+
+	UpdateTowelHUDStatus(HUD);
+	return true;
+}
+
 // =============================================================================
 // Tick
 // =============================================================================
@@ -137,40 +193,8 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 
 	// タオル交換は入力が無い間も進める。先に no-input return すると、
 	// 手を離した瞬間に交換タイマーと「交換中」UIが止まってしまう。
-	if (bIsSwapping)
+	if (TickTowelSwap(DeltaTime, HUD))
 	{
-		bTowelVisible = false;
-		bTowelInZoomView = false;
-		UpdateWipeSound(false);
-
-		if (HUD && bTowelShownOnHUD)
-		{
-			HUD->HideTowel();
-			bTowelShownOnHUD = false;
-		}
-
-		if (!bHasValidInput)
-		{
-			ProcessedHandSpeed = 0.0f;
-			ResetHandInputFilter();
-		}
-
-		SwapTimer -= DeltaTime;
-		if (SwapTimer <= 0.f)
-		{
-			bIsSwapping       = false;
-			CurrentDurability = MaxDurability;
-			UE_LOG(LogTemp, Warning,
-				TEXT("ATomatinaTowelSystem: タオル交換完了 Durability=%.1f"), CurrentDurability);
-
-			// 交換完了 SE
-			UTomatinaFunctionLibrary::PlayTomatinaCue2D(this, TowelReadySound);
-		}
-
-		if (HUD)
-		{
-			HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
-		}
 		return;
 	}
 
@@ -184,15 +208,8 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		// 拭き音を止める（手が離れたら即停止）
 		UpdateWipeSound(false);
 
-		if (HUD && bTowelShownOnHUD)
-		{
-			HUD->HideTowel();
-			bTowelShownOnHUD = false;
-		}
-		if (HUD)
-		{
-			HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
-		}
+		HideTowelVisual(HUD);
+		UpdateTowelHUDStatus(HUD);
 		return;
 	}
 
@@ -265,10 +282,7 @@ void ATomatinaTowelSystem::Tick(float DeltaTime)
 		}
 	}
 
-	if (HUD)
-	{
-		HUD->UpdateTowelStatus(MaxDurability > KINDA_SMALL_NUMBER ? CurrentDurability / MaxDurability : 0.0f, bIsSwapping);
-	}
+	UpdateTowelHUDStatus(HUD);
 
 	// ズーム映像へのタオル映り込み判定
 	bTowelInZoomView = CheckTowelInView(ClampedHandScreenPosition);

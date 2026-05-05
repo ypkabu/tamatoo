@@ -8,6 +8,7 @@
 #include "TomatinaTowelSystem.generated.h"
 
 class ATomatoDirtManager;
+class ATomatinaHUD;
 class ATomatinaPlayerPawn;
 class USoundBase;
 class UAudioComponent;
@@ -452,6 +453,10 @@ private:
 	FVector2D ConvertLeapPositionToScreen(FVector LeapPosition) const;
 	float ReadLeapAxis(FVector LeapPosition, ELeapTowelAxis Axis) const;
 	void UpdateLeapTooCloseState(FVector LeapPosition, bool bHasSelectedHand);
+	float GetDurabilityPercent() const;
+	void UpdateTowelHUDStatus(ATomatinaHUD* HUD) const;
+	void HideTowelVisual(ATomatinaHUD* HUD);
+	bool TickTowelSwap(float DeltaTime, ATomatinaHUD* HUD);
 	FVector2D ApplyHandSmoothing(FVector2D RawPosition, float DeltaTime);
 	float ApplyOneEuroAxis(float Value, float DeltaTime, FOneEuroAxisState& AxisState) const;
 	float CalculateOneEuroAlpha(float Cutoff, float DeltaTime) const;

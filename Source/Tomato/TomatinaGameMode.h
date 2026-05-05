@@ -343,6 +343,13 @@ private:
 
 	/** ロード→カウントダウンへの遷移処理 */
 	void BeginCountdownAfterLoading();
+	bool TickLoading(float RealDelta);
+	bool TickCountdown(float RealDelta);
+	bool TickGameTime(float DeltaSeconds);
+	bool TickPhotoResult(float RealDelta);
+	bool TickMissionResult(float RealDelta);
+	bool TickFinalResultBuildup(float RealDelta);
+	void TickMissionTimer(float DeltaSeconds);
 
 	// ── リザルト計時（FApp::GetDeltaTime 累積） ──────────────
 	float ResultElapsed = 0.f;

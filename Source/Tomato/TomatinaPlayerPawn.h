@@ -14,6 +14,7 @@ class APlayerController;
 class UInputMappingContext;
 class UInputAction;
 class ULeapComponent;
+class ATomatinaHUD;
 
 /**
  * カメラマン 1P のポーン。
@@ -194,6 +195,17 @@ private:
 
 	float PhoneCaptureBurstRemaining = 0.f;
 
+	void UpdateDualScreenLayoutRetry(float DeltaTime);
+	void UpdateZoomInterpolation(float RealDelta);
+	void CenterLegacySpanCursorWhenZoomReady();
+	void EnableZoomLookWhenReady();
+	void ApplyZoomLookInput(float RealDelta);
+	void UpdateZoomHUDCursor(ATomatinaHUD* HUD);
+	void ResetZoomViewWhenIdle();
+	void ClampMouseCursorToMainScreen();
+	void EndZoomInteraction();
+	void ClampZoomTargetOffsetAgainstWorld();
+	void ApplyZoomNearClipGuard();
 	void RequestPhoneCaptureBurst(float Duration);
 	void UpdatePhoneSceneCapture(float DeltaTime);
 	void CapturePhoneSceneNow();
